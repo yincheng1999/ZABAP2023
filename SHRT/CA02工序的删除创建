@@ -105,8 +105,8 @@ LOOP AT lt_plas ASSIGNING FIELD-SYMBOL(<lw_plas>) WHERE plnnr = <lw_head>-plnnr 
 *IF sy-subrc NE 0.
 APPEND INITIAL LINE TO lt_op ASSIGNING FIELD-SYMBOL(<lw_op>).
 <lw_op>-activity = <lw_plas>-vornr.
-<lw_op>-activity_old = <lw_plas>-vornr.
-<lw_op>-maintain_mode = 'D'. “删除所有的旧工序
+<lw_op>-activity_old = <lw_plas>-vornr. “如果是M模式则需要获取原编号，否则报错
+<lw_op>-maintain_mode = 'D'. “删除所有的旧工序 如未分配(PLMZ表没数据)则选择C模式
 <lw_op>-flag_bar_pointer = '0000000001'.
 <lw_op>-sequence_no = '000000'.
 *ENDIF.
