@@ -21,3 +21,268 @@ CALL FUNCTION 'CPCC_S_TASK_LIST_MAINTAIN' "CA02修改工序
 2.task_maintain_mode = 'D' 删除时，删除任务清单表头会连带着组（plko-plnnr）一起删除，再创建任务清单时组会变
 3.ca02更改路径时点分配提示‘不存在有效的物料单’,说明物料没有创建BOOM,CS01创建BOOM,才能继续分配
 
+具体参数例:
+*&---------------------------------------------------------------------*
+*& Form FRM_CALL_BAPI
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*      -->P_LS_DATA  text
+*&---------------------------------------------------------------------*
+SELECT matnr,
+       werks,
+       plnty,
+       plnnr,
+       plnal,
+       zkriz,
+       zaehl,
+       loekz
+  FROM mapl
+  INTO TABLE @DATA(lt_mapl)
+ WHERE matnr = @ps_data-matnr
+   AND werks = @ps_data-werks
+   AND loekz = @abap_false.
+
+IF lt_mapl IS NOT INITIAL.
+SELECT plnty,
+       plnnr,
+       plnal,
+       zaehl,
+       loekz
+  FROM plko
+  INTO TABLE @DATA(lt_plko)
+  FOR ALL ENTRIES IN @lt_mapl
+  WHERE plnty EQ 'N'
+    AND plnnr EQ @lt_mapl-plnnr
+*    AND plnal EQ @lt_mapl-plnal
+    AND plnal EQ '01'
+    AND zaehl EQ @lt_mapl-zaehl
+    AND loekz EQ @abap_false.
+ENDIF.
+
+IF lt_plko IS NOT INITIAL.
+SELECT a~plnty,
+       a~plnnr,
+       a~plnal,
+       a~plnfl,
+       a~plnkn,
+       a~zaehl,
+       a~datuv,
+       b~vornr
+
+  FROM plas AS a
+  JOIN plpo AS b  ON a~plnty = b~plnty
+                 AND a~plnnr = b~plnnr
+                 AND a~plnkn = b~plnkn
+                 AND a~zaehl = b~zaehl
+  INTO TABLE @DATA(lt_plas)
+  FOR ALL ENTRIES IN @lt_plko
+  WHERE a~plnty EQ 'N'
+    AND a~plnnr EQ @lt_plko-plnnr
+    AND a~plnal EQ @lt_plko-plnal
+    AND a~zaehl EQ @lt_plko-zaehl
+    AND a~loekz EQ @abap_false
+    AND a~datuv LE @ps_data-datuv.
+ENDIF.
+
+DATA: lt_return TYPE TABLE OF bapiret2.
+DATA  lt_op     TYPE TABLE OF cps_task_list_maint_opr WITH HEADER LINE.
+DATA  lt_opx    TYPE TABLE OF cps_task_list_maint_opr_x WITH HEADER LINE.
+DATA: lw_task   TYPE  cps_task_list_maint_tsk,
+      lw_task_x TYPE  cps_task_list_maint_tsk_x.
+
+DATA(lt_head) = lt_plko.
+SORT lt_head  BY plnnr plnal.
+DELETE ADJACENT DUPLICATES FROM lt_head COMPARING plnnr plnal.
+DATA: ls_mast TYPE mast,
+      lt_stpo TYPE STANDARD TABLE OF stpo.
+DATA componentallocation      TYPE cps_task_list_maint_com   OCCURS 0 WITH HEADER LINE.
+DATA component_allocations_x  TYPE cps_task_list_maint_com_x OCCURS 0 WITH HEADER LINE.
+LOOP AT lt_head ASSIGNING FIELD-SYMBOL(<lw_head>).
+LOOP AT lt_plas ASSIGNING FIELD-SYMBOL(<lw_plas>) WHERE plnnr = <lw_head>-plnnr AND plnal = <lw_head>-plnal.
+*READ TABLE gt_data TRANSPORTING NO FIELDS WITH KEY matnr = ps_data-matnr werks = ps_data-werks datuv = <lw_plas>-datuv vornr = <lw_plas>-vornr
+*                                                   verwe = ps_data-verwe statu = ps_data-statu.
+*IF sy-subrc NE 0.
+APPEND INITIAL LINE TO lt_op ASSIGNING FIELD-SYMBOL(<lw_op>).
+<lw_op>-activity = <lw_plas>-vornr.
+<lw_op>-activity_old = <lw_plas>-vornr.
+<lw_op>-maintain_mode = 'D'. “删除所有的旧工序
+<lw_op>-flag_bar_pointer = '0000000001'.
+<lw_op>-sequence_no = '000000'.
+*ENDIF.
+ENDLOOP.
+
+LOOP AT gt_data ASSIGNING FIELD-SYMBOL(<lw_data>) WHERE matnr = ps_data-matnr
+                                                    AND werks = ps_data-werks
+                                                    AND datuv = ps_data-datuv
+                                                    AND verwe = ps_data-verwe
+                                                    AND statu = ps_data-statu.
+lt_op-activity = <lw_data>-vornr.
+lt_op-activity_old = <lw_data>-vornr.
+CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+  EXPORTING
+    input  = lt_op-activity
+  IMPORTING
+    output = lt_op-activity.
+"以下两行很重要
+lt_op-maintain_mode    = 'C'.  "按传入值，C新增，M修改,D删除
+lt_op-flag_bar_pointer = '0000000001'.
+lt_op-sequence_no = '000000'.  "plfl-plnfl  如果没有则赋值000000
+lt_op-plant = <lw_data>-werks.
+lt_op-control_key = <lw_data>-steus."控制码
+lt_op-work_cntr = <lw_data>-arbpl."工作中心
+lt_op-description = <lw_data>-ltxa1."工序文本
+lt_op-cost_relevant = 'X'.
+lt_op-denominator  = '1'."用于转换工艺路线和工序单位的分母
+lt_op-nominator    = '1'."用于转换任务清单和工序计量单位的计数器
+lt_op-base_quantity = <lw_data>-bmsch."基本数量
+*lt_op-free_grid = 'X'."间隔无时间或数量参考   ?
+lt_op-std_value_01 = <lw_data>-vgw01.  "人工时间
+lt_op-std_value_02 = <lw_data>-vgw02.  "机器时间
+lt_op-std_value_03 = <lw_data>-vgw03.  "模具
+lt_op-std_value_04 = <lw_data>-vgw04.  "间接费用
+lt_op-std_value_05 = <lw_data>-vgw05.  "间接费用
+
+"单位没有输入都是MIN
+IF lt_op-std_value_01 IS NOT INITIAL.
+lt_op-std_unit_01 = 'MIN'.
+ENDIF.
+IF lt_op-std_value_02 IS NOT INITIAL.
+lt_op-std_unit_02 = 'MIN'.
+ENDIF.
+IF lt_op-std_value_03 IS NOT INITIAL.
+lt_op-std_unit_03 = 'MIN'.
+ENDIF.
+IF lt_op-std_value_04 IS NOT INITIAL.
+lt_op-std_unit_04 = 'MIN'.
+ENDIF.
+IF lt_op-std_value_05 IS NOT INITIAL.
+lt_op-std_unit_05 = 'MIN'.
+ENDIF.
+
+lt_op-sorted_by   = <lw_data>-sort.
+lt_op-matl_group  = <lw_data>-matl.
+lt_op-purch_group = <lw_data>-purg.
+lt_op-price_unit  = <lw_data>-price.
+lt_op-info_rec_net_price  = <lw_data>-info.
+lt_op-cost_elem   = <lw_data>-cost.
+lt_op-currency    = <lw_data>-currency.
+APPEND lt_op.
+
+      lt_opx-activity = 'X'.
+      lt_opx-control_key = 'X'.
+      lt_opx-work_cntr = 'X'.
+      lt_opx-plant = 'X'.
+      lt_opx-description = 'X'.
+      lt_opx-cost_relevant = 'X'.
+      lt_opx-denominator = 'X'.
+      lt_opx-nominator = 'X'.
+      lt_opx-base_quantity = 'X'.
+*    LT_OPX-ACTTYPE_01 = 'X'.
+      lt_opx-std_unit_01 = 'X'.
+      lt_opx-std_unit_01_iso = 'X'.
+      lt_opx-std_value_01 = 'X'.
+*    LT_OPX-ACTTYPE_02 = 'X'.
+      lt_opx-std_unit_02 = 'X'.
+      lt_opx-std_unit_02_iso = 'X'.
+      lt_opx-std_value_02 = 'X'.
+*    LT_OPX-ACTTYPE_03 = 'X'.
+      lt_opx-std_unit_03 = 'X'.
+      lt_opx-std_unit_03_iso = 'X'.
+      lt_opx-std_value_03 = 'X'.
+*    LT_OPX-ACTTYPE_04 = 'X'.
+      lt_opx-std_unit_04 = 'X'.
+      lt_opx-std_unit_04_iso = 'X'.
+      lt_opx-std_value_04 = 'X'.
+      lt_opx-std_unit_05 = 'X'.
+      lt_opx-std_unit_05_iso = 'X'.
+      lt_opx-std_value_05 = 'X'.
+
+      lt_opx-sorted_by   = 'X'.
+      lt_opx-matl_group  = 'X'.
+      lt_opx-purch_group = 'X'.
+      lt_opx-price_unit  = 'X'.
+      lt_opx-info_rec_net_price  = 'X'.
+      lt_opx-cost_elem   = 'X'.
+      lt_opx-currency    = 'X'.
+      APPEND lt_opx.
+
+          IF <lw_data>-maxnr IS NOT INITIAL.
+            CLEAR: ls_mast, lt_stpo.
+            SELECT SINGLE * FROM mast INTO ls_mast WHERE matnr = <lw_data>-matnr AND werks = <lw_data>-werks AND stlan = '1'.
+            IF sy-subrc = 0.
+              SELECT * FROM stpo INTO TABLE lt_stpo WHERE stlty = 'M' AND stlnr = ls_mast-stlnr.
+              IF sy-subrc = 0.
+                SORT lt_stpo BY sortf.
+                DELETE lt_stpo WHERE sortf IS INITIAL.
+              ENDIF.
+            ENDIF.
+
+            IF lt_stpo IS NOT INITIAL.
+              LOOP AT lt_stpo ASSIGNING FIELD-SYMBOL(<fs_stpo>).
+                APPEND INITIAL LINE TO componentallocation ASSIGNING FIELD-SYMBOL(<fs_comp>).
+*                <fs_comp>-valid_from    = ls_data-datuv.
+*                <fs_comp>-valid_to_date = '99991231'.
+                <fs_comp>-maintain_mode = 'C'.
+                <fs_comp>-activity      = <lw_data>-vornr.
+                <fs_comp>-bom_type      = <fs_stpo>-stlty.
+                <fs_comp>-bom_no        = <fs_stpo>-stlnr.
+                <fs_comp>-alternative_bom = ls_mast-stlal.
+                <fs_comp>-item_id       = <fs_stpo>-stlkn.
+                <fs_comp>-item_no       = <fs_stpo>-posnr.
+                <fs_comp>-comp_qty      = <fs_stpo>-menge.
+                <fs_comp>-comp_unit     = <fs_stpo>-meins.
+                <fs_comp>-plant         = <lw_data>-werks.
+                <fs_comp>-material      = <fs_stpo>-idnrk.
+                <fs_comp>-bom_type_root = <fs_stpo>-stlty.
+                <fs_comp>-bom_no_root   = <fs_stpo>-stlnr.
+                <fs_comp>-alternative_bom_root = ls_mast-stlal.
+                <fs_comp>-sequence_no = '000000'.
+                <fs_comp>-sequence_no_old = '000000'.
+              ENDLOOP.
+            ENDIF.
+          ENDIF.
+ENDLOOP.
+
+lw_task-task_list_usage  = ps_data-verwe.
+lw_task-plant            = ps_data-werks.
+lw_task-task_list_status = ps_data-statu.
+lw_task_x-task_list_usage  = 'X'.
+lw_task_x-plant            = 'X'.
+lw_task_x-task_list_status = 'X'.
+
+CALL FUNCTION 'CPCC_S_TASK_LIST_MAINTAIN' "CA02修改工序
+  EXPORTING
+    key_date                = ps_data-datuv "关键日期
+    task_list_type          = 'N'  "任务清单类型 PLMZ-PLNTY
+    task_list_group         = <lw_head>-plnnr  "组 PLMZ-PLNNR
+    group_counter           = <lw_head>-plnal  "组计数器 PLMZ-PLNAL
+    task_maintain_mode      = 'M'   "表头task结构操作模式 D 删除 删除模式下会把任务清单表头连带组删掉，再新建组会变
+    application             = 'PP01'
+    bom_usage               = '1'
+    material                = ps_data-matnr  "工艺路线父项物料号
+    plant                   = ps_data-werks  "工厂
+    task                    = lw_task "修改抬头
+    task_x                  = lw_task_x
+  TABLES
+    operations              = lt_op "创建/修改 工序
+    operations_x            = lt_opx
+    component_allocations   = componentallocation  "组件分配工序,物料要先创建BOOM（CS01）
+    return                  = lt_return.
+
+READ TABLE lt_return ASSIGNING FIELD-SYMBOL(<lw_return>) WITH KEY type = 'E'.
+IF sy-subrc EQ 0.
+CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+ps_data-light = icon_led_red.
+LOOP AT lt_return ASSIGNING <lw_return> WHERE type = 'E'.
+ps_data-zmsg = ps_data-zmsg && <lw_return>-message.
+ENDLOOP.
+ELSE.
+CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+  EXPORTING
+    wait = 'X'.
+ps_data-light = icon_led_green.
+ps_data-zmsg = '修改工艺路线成功'.
+ENDIF.
+ENDLOOP.
+ENDFORM.
