@@ -20,7 +20,6 @@ CALL FUNCTION 'CPCC_S_TASK_LIST_MAINTAIN' "CA02修改工序
 1.创建/修改工序在表参数operations中进行,可以同时进行创建和删除的操作
 2.task_maintain_mode = 'D' 删除时，删除任务清单表头会连带着组（plko-plnnr）一起删除，再创建任务清单时组会变
 3.ca02更改路径时点分配提示‘不存在有效的物料单’,说明物料没有创建BOOM,CS01创建BOOM,才能继续分配
-![image](https://github.com/yincheng1999/ZABAP2023/blob/main/CA02/1.CA02%E7%BB%84%E4%BB%B6%E5%88%86%E9%85%8D%E5%B7%A5%E5%BA%8F%E6%97%B6%E6%9C%AA%E6%89%BE%E5%88%B0%E6%9C%89%E6%95%88%E7%9A%84%E7%89%A9%E6%96%99%E5%8D%95.png)
 
 具体参数例:
 *&---------------------------------------------------------------------*
