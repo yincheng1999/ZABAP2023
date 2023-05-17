@@ -1,0 +1,159 @@
+1.修改BOOM之前 先用CSAP_MAT_BOM_OPEN打开BOOM获取BOOM的相关数据
+
+*&---------------------------------------------------------------------*
+*&      Form  USER_COMMAND
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM user_command USING f_ucomm LIKE sy-ucomm
+                        i_selfield TYPE slis_selfield.
+
+  DATA: lv_warning  TYPE capiflag-flwarning,
+        lv_stko     TYPE stko_api02.
+
+  DATA: ls_stko TYPE stko_api01,
+        lt_stpo TYPE TABLE OF stpo_api03,
+        ls_stpo TYPE stpo_api03.
+  DATA: lv_index TYPE sy-index,
+        lv_tabix TYPE sy-tabix.
+  DATA: lv_date1 TYPE char10,
+        lv_date2 TYPE char10,
+        lv_num1  TYPE n LENGTH 8,
+        lv_num2  TYPE n LENGTH 8.
+
+  CASE f_ucomm.
+    WHEN 'IMPORT'.
+      IF gs_flag = 'X'.
+        MESSAGE '请勿重复创建' TYPE 'S'.
+        EXIT.
+      ENDIF.
+
+   LOOP AT lt_data INTO ls_data.
+   lv_tabix = sy-tabix.
+   CALL FUNCTION 'CSAP_MAT_BOM_OPEN'
+     EXPORTING
+       material    = ls_data-matnr
+       plant       = ls_data-werks
+       bom_usage   = ls_data-stlan
+*       alternative = lv_alternative
+       valid_from  = ls_data-datuv
+     TABLES
+       t_stpo      = lt_stpo"这里得到了LV_MATERIAL对应的BOM的所有的组件数据
+     EXCEPTIONS
+       error       = 1
+       OTHERS      = 2.
+    IF sy-subrc EQ 0.
+    LOOP AT lt_stpo ASSIGNING FIELD-SYMBOL(<lw_stpo>).
+*      lv_date1 = <lw_stpo>-valid_from.
+*      CALL FUNCTION 'PREPARE_STRING'
+*        EXPORTING
+*          i_valid_chars        = '  0123456789'
+*          i_xvalid_check       = 'X'
+*          i_xchar_repl         = 'X'
+*          i_xtoupper           = 'X'
+*        CHANGING
+*          c_string             = lv_date1
+*                .
+*      lv_date2 = ls_data-datuv.
+*      CALL FUNCTION 'PREPARE_STRING'
+*        EXPORTING
+*          i_valid_chars        = '  0123456789'
+*          i_xvalid_check       = 'X'
+*          i_xchar_repl         = 'X'
+*          i_xtoupper           = 'X'
+*        CHANGING
+*          c_string             = lv_date2
+*                .
+*       lv_num1 = lv_date1.
+*       lv_num2 = lv_date2.
+*       IF lv_num1  EQ lv_num2.
+       <lw_stpo>-fldelete = abap_true. "删除标识
+*       ELSE.
+*       DELETE TABLE lt_stpo FROM <lw_stpo>.
+*       ENDIF.
+    ENDLOOP.
+
+        ls_stko-base_quan = ls_data-bmeng."基准数量
+        ls_stko-base_unit = ls_data-bmein."基本单位
+        ls_stko-bom_status = '01'."BOM状态
+        lv_index = '1'.
+        LOOP AT gt_data INTO gs_data WHERE matnr = ls_data-matnr
+                                       AND werks = ls_data-werks
+                                       AND stlan = ls_data-stlan
+                                       AND datuv = ls_data-datuv.
+
+          SELECT SINGLE matkl FROM mara INTO ls_stpo-mat_group WHERE matnr = gs_data-matnr."物料组
+          ls_stpo-item_categ = 'L'."项目类别
+          ls_stpo-component = gs_data-idnrk."BOM组件物料(子件)
+          ls_stpo-comp_qty = gs_data-menge."组件数量(子件)
+          ls_stpo-comp_unit = gs_data-meins."组件单位(子件)
+          ls_stpo-spproctype = gs_data-itsob."虚拟件
+          ls_stpo-issue_loc = gs_data-lgort."生产存储地
+          ls_stpo-valid_from = gs_data-datuv."date from
+          ls_stpo-identifier = ls_stpo-item_no = lv_index.
+          IF ls_data-stlan <> 'W'.
+            ls_stpo-rel_cost = 'X'.
+          ENDIF.
+***** begin of change 2019.02.25
+          ls_stpo-sortstring = gs_data-sortf. "排序字符串
+          ls_stpo-rel_cost   = gs_data-sanka."生产相关标识
+          ls_stpo-rel_prod   = gs_data-sanfe."成本相关标识
+          ls_stpo-rec_allowd = gs_data-rekrs.
+          ls_stpo-comp_scrap = gs_data-ausch.
+***** end of change 2019.02.25
+          APPEND ls_stpo TO lt_stpo.
+          CLEAR:ls_stpo.
+          lv_index = lv_index + 1.
+        ENDLOOP.
+
+      CALL FUNCTION 'CSAP_MAT_BOM_MAINTAIN'
+        EXPORTING
+          material                  = ls_data-matnr "物料编号
+          plant                     = ls_data-werks "工厂
+          bom_usage                 = ls_data-stlan "BOM 用途
+          valid_from                = ls_data-datuv
+          i_stko                    = ls_stko
+          fl_commit_and_wait        = 'X'
+          fl_bom_create             = 'X'
+          fl_new_item               = 'X'
+          fl_complete               = 'X'
+       IMPORTING
+         fl_warning                 = lv_warning
+         o_stko                     = lv_stko
+       TABLES
+          t_stpo                    = lt_stpo
+       EXCEPTIONS
+         error                     = 1
+                .
+        IF sy-subrc <> 0.
+          ls_data-light = icon_led_red.
+          MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 INTO ls_data-zmsg.
+*          ls_data-zmsg = | BOM 创建失败 |.
+          CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+        ELSE.
+          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+            EXPORTING
+              wait = 'X'.
+          ls_data-light = icon_led_green.
+          ls_data-zmsg = | BOM 修改成功 |.
+        ENDIF.
+    ELSE.
+        ls_data-light = icon_led_red.
+        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+        WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 INTO ls_data-zmsg.
+    ENDIF.
+        MODIFY lt_data FROM ls_data INDEX lv_tabix.
+        CLEAR:gs_data,ls_data,lt_stpo,ls_stko.
+  ENDLOOP.
+  ENDCASE.
+
+  i_selfield-refresh = 'X'.
+  i_selfield-col_stable = 'X'.
+  i_selfield-row_stable = 'X'.
+
+ENDFORM.
