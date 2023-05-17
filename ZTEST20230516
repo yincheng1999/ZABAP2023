@@ -1,2 +1,23 @@
-TEST
+CALL FUNCTION 'CPCC_S_TASK_LIST_MAINTAIN' "CA02修改工序
+  EXPORTING
+    key_date                = ps_data-datuv "关键日期
+    task_list_type          = 'N'  "任务清单类型 PLMZ-PLNTY
+    task_list_group         = <lw_head>-plnnr  "组 PLMZ-PLNNR
+    group_counter           = <lw_head>-plnal  "组计数器 PLMZ-PLNAL
+    task_maintain_mode      = 'M'   "表头task结构操作模式 D 删除 删除模式下会把任务清单表头连带组删掉，再新建组会变
+    application             = 'PP01'
+    bom_usage               = '1'
+    material                = ps_data-matnr  "工艺路线父项物料号
+    plant                   = ps_data-werks  "工厂
+    task                    = lw_task "修改抬头
+    task_x                  = lw_task_x
+  TABLES
+    operations              = lt_op "创建/修改 工序
+    operations_x            = lt_opx
+    component_allocations   = componentallocation  "组件分配工序,物料要先创建BOOM（CS01）
+    return                  = lt_return.
+
+1.创建/修改工序在表参数operations中进行,可以同时进行创建和删除的操作
+2.task_maintain_mode = 'D' 删除时，删除任务清单表头会连带着组（plko-plnnr）一起删除，再创建任务清单时组会变
+3.ca02更改路径时点分配提示‘不存在有效的物料单’,说明物料没有创建BOOM,CS01创建BOOM,才能继续分配
 
