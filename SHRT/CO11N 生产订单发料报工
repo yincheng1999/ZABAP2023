@@ -1,0 +1,200 @@
+1.用BAPI_PRODORDCONF_GET_TT_PROP获取生产订单的相关信息
+2.返回消息IMPORTING中参数return和TABLES中detail_return并不能直接获得生成的物料凭证，
+要通过detail_return-conf_no=afwi-rueck AND detail_return-conf_cnt = afwi-rmzhl取得物料凭证，
+如果取得的物料凭证年度为空，则生成物料凭证失败，可以通过COGI查看具体信息并且更改错误信息后过账，或者是在affw表中再关联T100取得具体的报错消息。
+*&---------------------------------------------------------------------*
+*& Form FRM_CALL_BAPI_CREATE
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM frm_call_bapi_create .
+DATA:lt_timetickets    TYPE TABLE OF bapi_pp_timeticket,
+     lw_timetickets    TYPE bapi_pp_timeticket,
+     lt_goodsmovements TYPE TABLE OF bapi2017_gm_item_create,
+     lw_goodsmovements TYPE bapi2017_gm_item_create,
+     lw_propose        LIKE bapi_pp_conf_prop.
+DATA:lt_return   LIKE bapiret1.
+DATA:lt_return_detail LIKE TABLE OF bapi_coru_return.
+DATA:ls_link  TYPE bapi_link_conf_goodsmov,
+     lt_link  TYPE STANDARD TABLE OF bapi_link_conf_goodsmov.
+DATA:lv_index TYPE i.
+   REFRESH:lt_timetickets.
+
+   DATA(lt_check) = gt_alv.
+   DELETE lt_check WHERE sel = abap_false.
+   READ TABLE lt_check TRANSPORTING NO FIELDS WITH KEY zfl_status = 'S'.
+   IF sy-subrc EQ 0.
+   MESSAGE '禁止重复发料/报工' TYPE 'S' DISPLAY LIKE 'E'.
+   EXIT.
+   ENDIF.
+   READ TABLE lt_check TRANSPORTING NO FIELDS WITH KEY zbg_status = 'S'.
+   IF sy-subrc EQ 0.
+   MESSAGE '禁止重复发料/报工' TYPE 'S' DISPLAY LIKE 'E'.
+   EXIT.
+   ENDIF.
+
+   LOOP AT gt_alv ASSIGNING FIELD-SYMBOL(<lw_alv>) WHERE zbg_menge GT 0 AND sel = abap_true..
+* 1.需要更新的数据设置
+      CLEAR lw_propose.
+      lw_propose-quantity          = 'X'.   "更新数量
+      lw_propose-date_and_time     = 'X'.   "更新作业时间
+      lw_propose-goodsmovement     = 'X'.   "更新货物移动
+* 2.作业时间
+      CLEAR: lw_timetickets,lt_timetickets[].
+      lw_timetickets-orderid       = <lw_alv>-aufnr. "工单号
+      lw_timetickets-operation     = '0010'.  "工序号
+      lw_timetickets-yield         = <lw_alv>-zbg_menge.. "工单生产数量
+      lw_timetickets-sequence      = '000000'.  "
+      APPEND lw_timetickets TO lt_timetickets.
+      CLEAR  lw_timetickets.
+* 3.货物移动属性
+* 第一次赋值，用于获取相关默认属性值
+      CLEAR: lw_goodsmovements,lt_goodsmovements[].
+      lw_goodsmovements-orderid    = <lw_alv>-aufnr.  "生产订单号
+      lw_goodsmovements-order_itno = '0010'.   "工序号
+      APPEND lw_goodsmovements TO lt_goodsmovements.
+      CLEAR  lw_goodsmovements.
+
+* 4.调用BAPI，获取默认属性值
+      CALL FUNCTION 'BAPI_PRODORDCONF_GET_TT_PROP'
+        EXPORTING
+          propose            = lw_propose
+        IMPORTING
+          return             = lt_return
+        TABLES
+          timetickets        = lt_timetickets    "获取报工相关信息
+          goodsmovements     = lt_goodsmovements "获取物料移动相关信息
+          link_conf_goodsmov = lt_link
+          detail_return      = lt_return_detail.
+
+     LOOP AT lt_timetickets ASSIGNING FIELD-SYMBOL(<lw_timetickets>).
+     <lw_timetickets>-orderid            = <lw_alv>-aufnr."订单号
+     <lw_timetickets>-postg_date         = sy-datum."过账日期
+     <lw_timetickets>-operation          = '0010'."活动编号（工序）
+     <lw_timetickets>-sequence           = '000000'."序列
+     <lw_timetickets>-yield              = <lw_alv>-zbg_menge.
+     ENDLOOP.
+     PERFORM frm_get_lt_timetickets  TABLES lt_timetickets USING <lw_alv>.
+     LOOP AT lt_goodsmovements ASSIGNING FIELD-SYMBOL(<lw_goodsmovements>).
+     <lw_goodsmovements>-material     = <lw_alv>-zfl_matnr.
+     <lw_goodsmovements>-entry_qnt    = <lw_alv>-zfl_menge.
+     <lw_goodsmovements>-stge_loc     = <lw_alv>-zfl_lgort.
+     <lw_goodsmovements>-batch        = <lw_alv>-zfl_charg.
+     <lw_goodsmovements>-move_type    = '261'.
+     ENDLOOP.
+
+       CALL FUNCTION 'BAPI_PRODORDCONF_CREATE_TT'
+           IMPORTING
+              return               = lt_return
+           TABLES
+              timetickets          = lt_timetickets  "报工
+              goodsmovements       = lt_goodsmovements  "发料，用来生成物料凭证的相关数据
+              link_conf_goodsmov   = lt_link
+              detail_return        = lt_return_detail
+          .
+  IF sy-subrc EQ 0.
+    READ TABLE lt_return_detail ASSIGNING FIELD-SYMBOL(<lw_return_detail>) WITH KEY type = 'E'.
+    IF sy-subrc EQ 0.
+      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+      CONCATENATE '错误!' <lw_return_detail>-message INTO <lw_alv>-zfl_msg.
+      CONCATENATE '错误!' <lw_return_detail>-message INTO <lw_alv>-zbg_msg.
+      <lw_alv>-zfl_status = 'E'.
+      <lw_alv>-zbg_status = 'E'.
+    ELSE.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          wait = 'X'.
+        READ TABLE lt_return_detail ASSIGNING FIELD-SYMBOL(<lw_detail>) WITH KEY row = 1.
+        IF sy-subrc EQ 0.
+*        <lw_alv>-zfl_msg = '成功'.
+        <lw_alv>-zbg_msg = '成功'.
+*        <lw_alv>-zfl_status = 'S'.
+        <lw_alv>-zbg_status = 'S'.
+        <lw_alv>-conf_no  = <lw_detail>-conf_no .
+        <lw_alv>-conf_cnt = <lw_detail>-conf_cnt.
+        ENDIF.
+    ENDIF.
+  ELSE.
+    <lw_alv>-zbg_status = 'E'.
+*    <lw_alv>-zfl_status = 'E'.
+    <lw_alv>-zbg_msg = '错误!报工失败!'.
+*    <lw_alv>-zfl_msg = '错误!发料失败!'.
+  ENDIF.
+  CLEAR:lt_return_detail,lt_return,lt_timetickets,lt_goodsmovements.
+  ENDLOOP.
+
+  WAIT UP TO 1 SECONDS.
+  DATA lt_zppt021 TYPE TABLE OF zppt021.
+  IF gt_alv IS NOT INITIAL.
+  SELECT rueck,
+         rmzhl,
+         mblnr,
+         mjahr,
+         mblpo,
+         xallp
+
+    FROM afwi
+    INTO TABLE @DATA(lt_afwi)
+    FOR ALL ENTRIES IN @gt_alv
+    WHERE rueck EQ @gt_alv-conf_no
+      AND rmzhl EQ @gt_alv-conf_cnt.
+  ENDIF.
+
+  IF lt_afwi IS NOT INITIAL.
+  SELECT weblnr,
+         weblpos,
+         msgv1,
+         msgv2,
+         msgv3,
+         msgv4
+    FROM affw
+    INTO TABLE @DATA(lt_affw)
+    FOR ALL ENTRIES IN @lt_afwi
+    WHERE weblnr  = @lt_afwi-mblnr.
+*      AND weblpos = @lt_afwi-mblpo.
+  ENDIF.
+  SORT lt_afwi BY rueck rmzhl.
+  SORT lt_affw BY weblnr weblpos.
+  LOOP AT gt_alv ASSIGNING <lw_alv> WHERE zbg_menge GT 0 AND sel = abap_true.
+  READ TABLE lt_afwi ASSIGNING FIELD-SYMBOL(<lw_afwi>) WITH KEY rueck = <lw_alv>-conf_no
+                                                                rmzhl = <lw_alv>-conf_cnt BINARY SEARCH.
+  IF sy-subrc EQ 0.
+  <lw_alv>-zfl_mblnr =  <lw_afwi>-mblnr.
+  <lw_alv>-zfl_zeile =  <lw_afwi>-mblpo.
+  IF <lw_afwi>-mjahr IS INITIAL.
+    <lw_alv>-zfl_status = 'E'.
+    <lw_alv>-zfl_msg = '错误!发料失败!'.
+  ELSE.
+    <lw_alv>-zfl_status = 'S'.
+    <lw_alv>-zfl_msg = '成功!'.
+  ENDIF.
+  ENDIF.
+
+  APPEND INITIAL LINE TO lt_zppt021 ASSIGNING FIELD-SYMBOL(<lw_zppt021>).
+  <lw_zppt021>-mblnr       = <lw_alv>-mblnr.
+  <lw_zppt021>-zeile       = <lw_alv>-zeile.
+  <lw_zppt021>-mjahr       = <lw_alv>-mjahr.
+  <lw_zppt021>-aufnr       = <lw_alv>-aufnr.
+  <lw_zppt021>-bldat       = <lw_alv>-bldat.
+  <lw_zppt021>-charg       = <lw_alv>-charg.
+  <lw_zppt021>-lgort       = <lw_alv>-lgort.
+  <lw_zppt021>-bwart       = <lw_alv>-bwart.
+  <lw_zppt021>-matnr       = <lw_alv>-matnr.
+  <lw_zppt021>-menge       = <lw_alv>-menge.
+  <lw_zppt021>-meins       = <lw_alv>-meins.
+  <lw_zppt021>-zfl_mblnr   = <lw_alv>-zfl_mblnr.
+  <lw_zppt021>-zfl_zeile   = <lw_alv>-zfl_zeile.
+  <lw_zppt021>-zfl_matnr   = <lw_alv>-zfl_matnr.
+  <lw_zppt021>-zfl_menge   = <lw_alv>-zfl_menge.
+  <lw_zppt021>-zfl_status  = <lw_alv>-zfl_status.
+  <lw_zppt021>-zfl_msg     = <lw_alv>-zfl_msg.
+  <lw_zppt021>-zbg_menge   = <lw_alv>-zbg_menge.
+  <lw_zppt021>-zbg_status  = <lw_alv>-zbg_status.
+  <lw_zppt021>-zbg_msg     = <lw_alv>-zbg_msg.
+  ENDLOOP.
+  MODIFY zppt021 FROM TABLE lt_zppt021.
+ENDFORM.
+*&---------------------------------------------------------------------*
