@@ -1,0 +1,14 @@
+DATA: lt_operation TYPE TABLE OF afvgd,
+      lv_vornr     TYPE vornr,
+      lv_aufnr     TYPE aufnr.
+    
+    CALL FUNCTION 'PM_ORDER_DATA_READ' "获取生产订单中的工序
+      EXPORTING
+        order_number    = lv_aufnr
+      TABLES
+        iafvgd          = lt_operation
+      EXCEPTIONS
+        order_not_found = 1.
+    
+这个BAPI使用时会有一个BUG，连续获取不同生产订单的工序时不会清空一个全局变量，导致抛出异常DUMP  Exception condition "ITAB_ERROR" triggered
+所以在每次运行PM_ORDER_DATA_READ前关闭生产订单CALL FUNCTION 'CO_EXT_ORDER_RESET'或者清空变量。
