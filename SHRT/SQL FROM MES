@@ -1,0 +1,167 @@
+"SAP直连MES数据库，并且从MES中取数
+首先需要配置DBCO中的连接
+在代码中先连接对方的数据库，然后在EXEC SQL和ENDEXEC中按照对方的数据库填入对方的SQL语法
+
+
+DATA: c_dbs     TYPE  dbcon-con_name VALUE 'OASQL',
+      ls_return TYPE          bapiret2.
+DATA: lr_sqlerr_ref TYPE REF TO cx_sql_exception.
+DATA   ls_msg     TYPE bapi_msg.
+DATA   exc_ref    TYPE REF TO  cx_sy_native_sql_error.
+DATA   sqlerr_ref TYPE REF TO cx_sql_exception.
+*IF sy-mandt <> '880'.
+*  c_dbs = 'OASQL_TEST'.
+*ENDIF.
+
+TYPES:BEGIN OF ty_data,
+        field1 TYPE string,
+        field2 TYPE string,
+        field3 TYPE string,
+        field4 TYPE string,
+        field5 TYPE string,
+        field6 TYPE string,
+      END OF ty_data.
+DATA gw_out TYPE ty_data.
+DATA gt_out TYPE TABLE OF ty_data.
+TRY.
+    CALL FUNCTION 'ZDBCO_DBLINK'
+      EXPORTING
+        dbcon  = c_dbs
+      IMPORTING
+        return = ls_return.
+
+    IF ls_return-type = 'E'.
+      RAISE EXCEPTION TYPE cx_sy_native_sql_error.
+    ENDIF.
+***  数据增删改查等操作语句
+
+***  捕获异常
+  CATCH cx_sql_exception INTO lr_sqlerr_ref.
+    ls_msg = lr_sqlerr_ref->get_text( ).
+ENDTRY.
+
+TRY.
+    EXEC SQL.
+      OPEN c1 FOR
+*--只取MES中未关闭的批次
+*select 批次号,图号,工艺,iNumber,加工地点 from
+*(
+*	--报工已完成的最近的(考虑到分批后,如果一个批次已报了下工序,另一个批次没报的话,会导致数量重复, 因此数量直接取批次数量,但是如果修改了数量,或者上下工序报工数量相差太大,那还是有差距
+*  )
+  select 0 as iOrder,tBGFinished.批次号,tBGFinished.工艺,tBGFinished.iNumber,tBGFinished.加工地点,cGoodCode as 图号
+  from (
+      select tPP_ProductionTaskRecord.iTaskID,ROW_NUMBER() over(partition by tPP_ProductionTaskRecord.iTaskID order by tPP_ProductionTaskRecord.dCreatedTime desc) as Rows,tPP_ProductionTaskRecord.ID as iRecordID
+        ,tPP_ProductionTaskRecord.cSAP_Lot as 批次号, tBasic_Process.cName as 工艺, tPP_ProductionTask.iNumber,tBasic_Place.cName as 加工地点,tPP_ProductionTask.cGoodCode
+      from tPP_ProductionTaskBG with(nolock)
+      left join tPP_ProductionTaskRecord with(nolock) on tPP_ProductionTaskRecord.iTypeID = 10 and tPP_ProductionTaskRecord.iDetailID = tPP_ProductionTaskBG.ID
+      left join tPP_ProductionTask with(nolock) on tPP_ProductionTaskRecord.iTaskID = tPP_ProductionTask.ID
+      left join tBasic_Process with(nolock) on tPP_ProductionTaskBG.iProcessID = tBasic_Process.ID
+      left join tBasic_Equipment with(nolock) on tPP_ProductionTaskBG.iEquipmentID = tBasic_Equipment.ID
+      left join tBasic_Place with(nolock) on tBasic_Place.ID = tBasic_Equipment.iPlaceID
+      where tPP_ProductionTask.iClosed = 0 and ((tPP_ProductionTaskBG.iMultiBG = 1 and tPP_ProductionTaskBG.iMultiBGFinished = 1) or tPP_ProductionTaskBG.iMultiBG = 0)
+*     --ORDER BY tPP_ProductionTaskRecord.iTaskID,tPP_ProductionTaskRecord.dCreatedTime DESC
+    ) tBGFinished
+  where tBGFinished.Rows = 1
+
+  union
+
+*	--报工未完成的最近的
+  select 1 as iOrder,tBGFinished.批次号,tBGFinished.工艺,tBGFinished.iNumber,tBGFinished.加工地点,cGoodCode as 图号
+  from (
+      select tPP_ProductionTaskRecord.iTaskID,ROW_NUMBER() over(partition by tPP_ProductionTaskRecord.iTaskID order by tPP_ProductionTaskRecord.dCreatedTime desc) as Rows,tPP_ProductionTaskRecord.ID as iRecordID
+        ,tPP_ProductionTaskRecord.cSAP_Lot as 批次号, tBasic_Process.cName as 工艺, tPP_ProductionTaskBG.iNumber,tBasic_Place.cName as 加工地点,tPP_ProductionTask.cGoodCode
+      from tPP_ProductionTaskBG with(nolock)
+      left join tPP_ProductionTaskRecord with(nolock) on tPP_ProductionTaskRecord.iTypeID = 10 and tPP_ProductionTaskRecord.iDetailID = tPP_ProductionTaskBG.ID
+      left join tPP_ProductionTask with(nolock) on tPP_ProductionTaskRecord.iTaskID = tPP_ProductionTask.ID
+      left join tBasic_Process with(nolock) on tPP_ProductionTaskBG.iProcessID = tBasic_Process.ID
+      left join tBasic_Equipment with(nolock) on tPP_ProductionTaskBG.iEquipmentID = tBasic_Equipment.ID
+      left join tBasic_Place with(nolock) on tBasic_Place.ID = tBasic_Equipment.iPlaceID
+      where tPP_ProductionTask.iClosed = 0 and (tPP_ProductionTaskBG.iMultiBG = 1 and tPP_ProductionTaskBG.iMultiBGFinished = 0)
+*     --ORDER BY tPP_ProductionTaskRecord.iTaskID,tPP_ProductionTaskRecord.dCreatedTime DESC
+    ) tBGFinished
+  where tBGFinished.Rows = 1
+*) tA order by 批次号,iOrder
+    ENDEXEC.
+
+    DO.
+***读取游标
+      EXEC SQL.
+        FETCH NEXT c1 INTO  :gw_out-field1,
+                            :gw_out-field2,
+                            :gw_out-field3,
+                            :gw_out-field4,
+                            :gw_out-field5,
+                            :gw_out-field6
+      ENDEXEC.
+      IF sy-subrc <> 0.
+        EXIT.
+      ELSE.
+        APPEND gw_out TO gt_out.
+      ENDIF.
+    ENDDO.
+
+  CATCH cx_sy_native_sql_error INTO exc_ref.
+  CATCH cx_sql_exception INTO sqlerr_ref.
+ENDTRY.
+
+SORT gt_out BY field1 field2 field3 field4 field5.
+
+BREAK-POINT.
+FORM pf_get_zz.
+  APPEND gw_out TO gt_out .
+ENDFORM.
+
+
+ZDBCO_DBLINK
+导入参数
+DBCON   TYPE	DBCON-CON_NAME	  数据库连接的逻辑名称
+导出参数
+RETURN	TYPE	BAPIRET2	返回参数
+FUNCTION zdbco_dblink.
+*"----------------------------------------------------------------------
+*"*"本地接口：
+*"  IMPORTING
+*"     VALUE(DBCON) TYPE  DBCON-CON_NAME
+*"  EXPORTING
+*"     REFERENCE(RETURN) TYPE  BAPIRET2
+*"----------------------------------------------------------------------
+*** 事务代码 DBCO 创建 MSSQL
+*** 明泰陈科提供 MSSQL_SERVER=192.168.2.2,1433 MSSQL_DBNAME=MEWMS_SAP
+  DATA: lv_check TYPE dbcon_name VALUE 'MSSQL'.
+  DATA: lc_exc_ref TYPE REF TO  cx_sy_native_sql_error.
+  TRY.
+*判断是否已经连接
+      EXEC SQL.
+        get connection :lv_check
+      ENDEXEC.
+      IF dbcon NE lv_check .
+        EXEC SQL.
+          connect to :DBCON
+        ENDEXEC.
+        IF sy-subrc <> 0.
+          return-type = 'E' .
+          return-message  = '连接外部数据错误' .
+          RETURN.
+        ENDIF.
+      ENDIF.
+      EXEC SQL.
+        set connection :DBCON
+      ENDEXEC.
+      IF sy-subrc EQ 0.
+        return-type = 'S' .
+        return-message  = '连接外部数据成功' .
+      ELSE.
+        return-type = 'E' .
+        return-message  = '连接外部数据错误' .
+      ENDIF.
+    CATCH  cx_sy_native_sql_error INTO lc_exc_ref.
+      return-message   = lc_exc_ref->get_text( ).
+      return-type  = 'E'.
+  ENDTRY.
+
+ENDFUNCTION.
+
+
+
+
+
