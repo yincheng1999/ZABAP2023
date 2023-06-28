@@ -1,7 +1,7 @@
 "SAP直连MES数据库，并且从MES中取数
 首先需要配置DBCO中的连接
 在代码中先连接对方的数据库，然后在EXEC SQL和ENDEXEC中按照对方的数据库填入对方的SQL语法
-
+对方的注释也需要用*注释掉
 
 DATA: c_dbs     TYPE  dbcon-con_name VALUE 'OASQL',
       ls_return TYPE          bapiret2.
