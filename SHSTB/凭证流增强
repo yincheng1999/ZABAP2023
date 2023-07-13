@@ -1,1 +1,53 @@
+包含文件 EAMCC_LDOCUMENT_FLOW_ALV
+*&---------------------------------------------------------------------*
+*&  Include           EAMCC_LDOCUMENT_FLOW_ALV
+*&  PM/EAM Cycle 2    Note 1671394
+*&---------------------------------------------------------------------*
+  FORM enable_variant_saving
 
+ 隐式增强:
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(1) Form ENABLE_VARIANT_SAVING, Ende                                                                                                                  A
+*$*$-Start: (1)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 1  ZMOD_ALV_FIELDCAT.    "active version
+  DATA lw_docflow TYPE DOCUMENT_FLOW_ALV_STRUC.
+  DATA lv_tabix TYPE sy-tabix.
+  LOOP AT gt_docflow ASSIGNING FIELD-SYMBOL(<fs_alv>) WHERE vbtyp_n = '5' OR vbtyp_n = '6'.
+    CLEAR :lw_docflow,lv_tabix.
+    lv_tabix = sy-tabix.
+   SELECT SINGLE belnr
+          FROM bkpf
+          INTO lw_docflow-docnum
+     WHERE xblnr = <fs_alv>-docnum.
+   IF sy-subrc EQ 0.
+     lw_docflow-doctype = '服务确认'.
+     lw_docflow-hlevel  = 3.
+     lw_docflow-status  = '已完成'.
+
+     lw_docflow-vbeln   = lw_docflow-docnum.
+     lw_docflow-docnuv  = <fs_alv>-docnum.
+     lw_docflow-vbelv   = <fs_alv>-docnum.
+     lw_docflow-objkey  = lw_docflow-docnum.
+     lw_docflow-aufnr   = lw_docflow-docnum.
+
+     SELECT SINGLE vbtyp
+       FROM vbak
+       INTO lw_docflow-vbtyp
+      WHERE vbeln = <fs_alv>-docnuv.
+
+     SELECT SINGLE vbtyp_n
+                   vbtyp_v
+       FROM vbfa
+       INTO (   lw_docflow-vbtyp_n,
+                lw_docflow-vbtyp_v )
+     WHERE  vbelv = lw_docflow-docnuv
+       AND  vbeln = lw_docflow-docnum.
+
+     READ TABLE gt_docflow TRANSPORTING NO FIELDS WITH KEY docnum = lw_docflow-docnum.
+     IF sy-subrc NE 0.
+     INSERT lw_docflow INTO gt_docflow  INDEX ( lv_tabix + 1 ).
+     ENDIF.
+   ENDIF.
+  ENDLOOP.
+ENDENHANCEMENT.
+*$*$-End:   (1)---------------------------------------------------------------------------------$*$*
+  ENDFORM.                    "enable_variant_saving
