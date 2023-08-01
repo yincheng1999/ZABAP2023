@@ -1,0 +1,180 @@
+这段代码可以直接运行,作用是上传电脑里的PDF文件，并且连接打印机打印
+*&---------------------------------------------------------------------*
+*& Report  ZTESTYC_1
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+
+REPORT ztest_lgy.
+
+DATA gv_cust_id TYPE s_customer.
+DATA: content TYPE fpcontent.
+DATA gs_outputparams TYPE sfpoutputparams.
+DATA: total_pages TYPE fppagecount.
+
+PARAMETERS: fpages TYPE i MODIF ID upl.
+
+INITIALIZATION.
+
+START-OF-SELECTION.
+
+
+  PERFORM upload_data.
+
+  PERFORM set_outpars.
+  PERFORM send_pdf_to_spool.
+
+FORM send_pdf_to_spool.
+
+  DATA: size TYPE i.
+  DATA: total_size TYPE i.
+  DATA: spoolid TYPE rspoid.
+  DATA: copies TYPE rspocopies.
+  DATA: lifetime.
+
+  size = xstrlen( content ).
+  ADD size TO total_size.
+  copies = gs_outputparams-copies.
+  lifetime = gs_outputparams-lifetime.
+
+  CALL FUNCTION 'ADS_CREATE_PDF_SPOOLJOB'
+    EXPORTING
+      dest              = gs_outputparams-dest
+      pages             = total_pages
+      pdf_data          = content
+      name              = gs_outputparams-dataset
+      suffix1           = gs_outputparams-suffix1
+      suffix2           = gs_outputparams-suffix2
+      copies            = copies
+      immediate_print   = gs_outputparams-reqimm
+      auto_delete       = gs_outputparams-reqdel
+      titleline         = gs_outputparams-covtitle
+      receiver          = gs_outputparams-receiver
+      division          = gs_outputparams-division
+      authority         = gs_outputparams-authority
+      lifetime          = lifetime
+    IMPORTING
+      spoolid           = spoolid
+    EXCEPTIONS
+      no_data           = 1
+      not_pdf           = 2
+      wrong_devtype     = 3
+      operation_failed  = 4
+      cannot_write_file = 5
+      device_missing    = 6
+      no_such_device    = 7
+      OTHERS            = 8.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+  MESSAGE s060(ssfcomposer) WITH spoolid.
+
+ENDFORM. " SEND_PDF_To_SPOOL
+
+
+FORM upload_data.
+
+  INCLUDE fp_spool_constants.
+
+  DATA: name      TYPE string,
+        filetype  TYPE char10,
+        filetable TYPE filetable,
+        rc        TYPE i,
+        guiobj    TYPE REF TO cl_gui_frontend_services,
+        uact      TYPE i.
+  DATA: datatab TYPE TABLE OF ssfdata.
+  DATA: extension TYPE string.
+  DATA: bin_filesize TYPE i.
+  DATA: buffer TYPE xstring.
+
+  extension = c_file_ext_pdf.
+  filetype = 'BIN'.
+  CONCATENATE '*' extension INTO name.
+  CREATE OBJECT guiobj.
+
+  CALL METHOD guiobj->file_open_dialog
+    EXPORTING
+      default_filename        = name
+    CHANGING
+      file_table              = filetable
+      rc                      = rc
+      user_action             = uact
+    EXCEPTIONS
+      file_open_dialog_failed = 1
+      cntl_error              = 2
+      error_no_gui            = 3.
+  IF uact = guiobj->action_cancel.
+    LEAVE PROGRAM.
+  ENDIF.
+
+  READ TABLE filetable INDEX 1 INTO name.
+  CHECK sy-subrc = 0.
+
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      filename        = name
+      filetype        = filetype
+    IMPORTING
+      filelength      = bin_filesize
+    TABLES
+      data_tab        = datatab
+    EXCEPTIONS
+      file_open_error = 1
+      file_read_error = 2
+      invalid_type    = 3
+      no_batch        = 4
+      OTHERS          = 5.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    LEAVE PROGRAM.
+  ENDIF.                                                    "#EC *
+
+  CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+    EXPORTING
+      input_length = bin_filesize
+    IMPORTING
+      buffer       = buffer
+    TABLES
+      binary_tab   = datatab
+    EXCEPTIONS
+      failed       = 1
+      OTHERS       = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    LEAVE PROGRAM.
+  ENDIF.
+
+  content = buffer.
+  total_pages = fpages.
+
+ENDFORM.
+
+FORM set_outpars .
+
+  DATA: ls_outpars TYPE sfpoutpar.
+
+  CALL FUNCTION 'FPCOMP_SHOW_DIALOG'
+    CHANGING
+      ie_outpar      = ls_outpars
+    EXCEPTIONS
+      cancel         = 1
+      usage_error    = 2
+      system_error   = 3
+      internal_error = 4
+      OTHERS         = 5.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE 'S' NUMBER sy-msgno
+   WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    LEAVE PROGRAM.
+  ELSE.
+    MOVE-CORRESPONDING ls_outpars TO gs_outputparams.
+  ENDIF.
+
+ENDFORM.
