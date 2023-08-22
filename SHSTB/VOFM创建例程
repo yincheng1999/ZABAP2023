@@ -8,3 +8,5 @@
 
 计算类型代码：（左）xkomv-kbetr 当前kschl（价格条件）的金额，
              （右）kwert 为 当前kschl（价格条件）的定价值
+
+传输之后记得运行激活例程RV80HGEN（SE38）
