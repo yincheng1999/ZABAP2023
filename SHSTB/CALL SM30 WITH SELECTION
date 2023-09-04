@@ -1,0 +1,73 @@
+TABLES kna1.
+SELECT-OPTIONS:s_kr_07  FOR kna1-kunnr.
+DATA:gt_seltab  TYPE STANDARD TABLE OF vimsellist.
+
+CLEAR gt_seltab.
+PERFORM frm_call_sm30.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_CALL_SM30
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_call_sm30 .
+  PERFORM frm_call_sel  TABLES s_kr_07 USING 'KUNNR' '' .
+  PERFORM frm_call_view USING 'S' 'ZTMM0007'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_CALL_SEL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_FIELDNAME  text
+*      -->P_APPEND_CONJUNCTION  text
+*      -->P_SELLIST  text
+*      -->P_CALL  text
+*      -->P_FUNCTION  text
+*      -->P_0270   text
+*      -->P_EXPORTING  text
+*      -->P_FIELDNAME  text
+*      -->P_=  text
+*      -->P_FIELDNAME  text
+*      -->P_APPEND_CONJUNCTION  text
+*      -->P_=  text
+*      -->P_APPEND_CONJUNCTION  text
+*      -->P_SELLIST  text
+*      -->P_=  text
+*      -->P_SELLIST  text
+*      -->P_RANGETAB  text
+*      -->P_=  text
+*      -->P_GT_SELTAB  text
+*----------------------------------------------------------------------*
+FORM frm_call_sel TABLES  s_rantab USING  pv_field LIKE  vimsellist-viewfield
+                                          pv_conjt LIKE  vimsellist-and_or .
+
+  CALL FUNCTION 'VIEW_RANGETAB_TO_SELLIST'
+    EXPORTING
+      fieldname          = pv_field   "字段名
+      append_conjunction = pv_conjt   "AND 条件连接符
+    TABLES
+      sellist            = gt_seltab  "生成调用条件
+      rangetab           = s_rantab.  "条件
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_CALL_VIEW
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_0267   text
+*      -->P_0268   text
+*----------------------------------------------------------------------*
+FORM frm_call_view  USING p_mode
+                          p_view LIKE	dd02v-tabname.
+
+  CALL FUNCTION 'VIEW_MAINTENANCE_CALL'
+    EXPORTING
+      action      = p_mode
+      view_name   = p_view
+    TABLES
+      dba_sellist = gt_seltab.
+
+ENDFORM.
