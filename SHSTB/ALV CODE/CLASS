@@ -1,0 +1,269 @@
+*&---------------------------------------------------------------------*
+*&  包含                ZPMM0002_M01
+*&---------------------------------------------------------------------*
+CLASS lcl_event_receiver DEFINITION DEFERRED. "声明类对象
+
+*----------------------------------------------------------------------*
+*       CLASS LCL_EVENT_RECEIVER DEFINITION DEFERRED
+*----------------------------------------------------------------------*
+*       LCL_EVENT_RECEIVER
+*----------------------------------------------------------------------*
+CLASS lcl_event_receiver DEFINITION.
+  PUBLIC SECTION.
+    DATA: ucomm TYPE sy-ucomm.
+    METHODS handle_data_changed FOR EVENT data_changed OF cl_gui_alv_grid
+      IMPORTING er_data_changed.
+    METHODS:
+      handle_f4 FOR EVENT onf4 OF cl_gui_alv_grid
+        IMPORTING e_fieldname   "列名
+                    es_row_no     "行号
+                    er_event_data
+                    et_bad_cells.
+
+  PRIVATE SECTION.
+ENDCLASS.
+*----------------------------------------------------------------------*
+*       CLASS lcl_event_receiver IMPLEMENTATION
+*----------------------------------------------------------------------*
+*       类实现
+*----------------------------------------------------------------------*
+CLASS lcl_event_receiver IMPLEMENTATION.
+  METHOD handle_data_changed.
+    PERFORM handle_data_changed USING er_data_changed.
+  ENDMETHOD.
+  METHOD  handle_f4.
+
+*     窗口时间参数的自定义f4检索帮助
+    CASE e_fieldname.
+      WHEN 'KUNNR'.   "内表字段名称
+        PERFORM f4_help_employee USING e_fieldname  "列名
+                                       es_row_no  "行号
+                                       er_event_data.
+    ENDCASE.
+*     设置后，alv稳定刷新
+    DATA lv_stbl TYPE lvc_s_stbl.
+    lv_stbl-row = 'X'." 基于行的稳定刷新
+    lv_stbl-col = 'X'." 基于列稳定刷新
+    CALL METHOD g_grid->refresh_table_display
+      EXPORTING
+        is_stable = lv_stbl.
+  ENDMETHOD.                    "handle_data_changed
+
+ENDCLASS.
+
+
+"方法perform的内容
+FORM f4_help_employee USING p_fieldname  TYPE lvc_fname
+                            p_row_no     TYPE lvc_s_roid
+                            er_event_data TYPE REF TO cl_alv_event_data.
+  DATA: lt_return TYPE STANDARD TABLE OF ddshretval,
+        ls_return TYPE ddshretval.
+  DATA :lv_eqart TYPE eqart.
+
+*  CLEAR gs_alv.
+*  READ TABLE gt_alv INTO gs_alv INDEX p_row_no-row_id.
+
+  IF p_fieldname = 'KUNNR'.  "展示内表字段
+    DATA:lt_vs TYPE TABLE OF ztmm0007."收件人搜索帮助表
+    CLEAR:lt_vs,lt_return.
+    SELECT * FROM ztmm0007  INTO TABLE @lt_vs ."Z开头自定义的表，也是你搜索帮助要显示的内容
+    SORT lt_vs BY kunnr .
+    CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+      EXPORTING
+*       DDIC_STRUCTURE   = ' '
+        retfield         = 'KUNNR'            "这个参数为帮助表中返回到ALV的字段的参数
+*       PVALKEY          = ' '
+        dynpprog         = sy-repid           "当前程序，不写会有问题
+        dynpnr           = sy-dynnr           "当前屏幕，不写会有问题
+        value_org        = 'S'                "默认为C但是此处不用S不行
+        callback_program = sy-repid
+      TABLES
+        value_tab        = lt_vs            "F4帮助值的表
+        return_tab       = lt_return
+      EXCEPTIONS
+        parameter_error  = 1
+        no_values_found  = 2
+        OTHERS           = 3.
+    IF sy-subrc = 0.
+****将选的值填入ALV字段中
+*      READ TABLE gt_alv INTO gs_alv INDEX p_row_no-row_id.
+      IF sy-subrc = 0.
+        READ TABLE lt_return INTO ls_return  INDEX 1.
+        IF ls_return-fieldval IS NOT INITIAL.
+*          gs_alv-employee = ls_return-fieldval.
+          CASE abap_true.
+            WHEN r_handle.
+              IF r_lifnr EQ abap_true.
+                READ TABLE gt_lifnr ASSIGNING FIELD-SYMBOL(<lw_lifnr>) INDEX p_row_no-row_id.
+                IF sy-subrc EQ 0.
+                  <lw_lifnr>-kunnr = ls_return-fieldval.
+                ENDIF.
+              ELSEIF r_zkunnr EQ abap_true.
+                READ TABLE gt_zkunnr ASSIGNING FIELD-SYMBOL(<lw_zkunnr>) INDEX p_row_no-row_id.
+                IF sy-subrc EQ 0.
+                  <lw_zkunnr>-kunnr = ls_return-fieldval.
+                ENDIF.
+              ENDIF.
+          ENDCASE.
+        ENDIF.
+        CLEAR:ls_return.
+      ENDIF.
+      "X表示事件已经处理，不会去调取系统标准搜索帮助，（不填写参考字段参考表，也可以忽略这个标识）
+      er_event_data->m_event_handled = 'X'.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+
+"监听方法
+FORM handle_data_changed USING p_er_data_changed TYPE REF TO   cl_alv_changed_data_protocol.
+  DATA : x_change TYPE lvc_s_modi .
+  LOOP AT p_er_data_changed->mt_good_cells INTO x_change.
+    CASE abap_true.
+      WHEN r_handle.
+        IF r_lifnr EQ abap_true.
+          IF x_change-fieldname = 'KUNNR'.
+            READ TABLE gt_lifnr ASSIGNING FIELD-SYMBOL(<lw_alv_l>) INDEX x_change-row_id.
+            IF sy-subrc EQ 0.
+              SELECT SINGLE name1
+                FROM ztmm0007
+                INTO <lw_alv_l>-kr_na
+               WHERE kunnr EQ x_change-value
+                 AND loevm EQ abap_false.
+              IF sy-subrc NE 0.
+                MESSAGE '该供应商组账号不存在' TYPE 'E'.
+              ENDIF.
+
+              SELECT COUNT(*)
+                FROM ztmm0008
+               WHERE kunnr EQ x_change-value.
+              IF sy-subrc EQ 0.
+                READ TABLE gt_del_08 TRANSPORTING NO FIELDS WITH KEY kunnr = x_change-value.
+                IF sy-subrc EQ 0.
+                  MESSAGE '该供应商组账号已存在组-供应商绑定表中，请先删除' TYPE 'E'.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+          IF x_change-fieldname = 'LIFNR'.
+            READ TABLE gt_lifnr ASSIGNING <lw_alv_l> INDEX x_change-row_id.
+            IF sy-subrc EQ 0.
+              SELECT SINGLE name1
+                       FROM lfa1
+                       INTO <lw_alv_l>-lr_na
+                      WHERE lifnr EQ x_change-value.
+              IF sy-subrc NE 0.
+                MESSAGE '该供应商不存在' TYPE 'E'.
+              ENDIF.
+
+              SELECT COUNT(*)
+                FROM ztmm0008
+               WHERE lifnr EQ x_change-value
+                 AND kunnr NE <lw_alv_l>-kunnr.
+              IF sy-subrc EQ 0.
+                READ TABLE gt_del_08 TRANSPORTING NO FIELDS WITH KEY kunnr = <lw_alv_l>-kunnr
+                                                                     lifnr = <lw_alv_l>-lifnr.
+                IF sy-subrc NE 0.
+                  MESSAGE '该供应商已绑定其他供应商组账号' TYPE 'E'.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ELSEIF r_zkunnr EQ abap_true.
+          IF x_change-fieldname = 'KUNNR'.
+            READ TABLE gt_zkunnr ASSIGNING FIELD-SYMBOL(<lw_alv_zk>) INDEX x_change-row_id.
+            IF sy-subrc EQ 0.
+              SELECT SINGLE name1
+                FROM ztmm0007
+                INTO <lw_alv_zk>-kr_na
+               WHERE kunnr EQ x_change-value
+                 AND loevm EQ abap_false.
+              IF sy-subrc NE 0.
+                MESSAGE '该供应商组账号不存在' TYPE 'E'.
+              ENDIF.
+
+              SELECT SINGLE  a~lifnr
+                             b~name1 AS lr_na
+                FROM ztmm0008 AS a
+                JOIN lfa1 AS b ON a~lifnr EQ b~lifnr
+                INTO CORRESPONDING FIELDS OF <lw_alv_zk>
+                WHERE a~kunnr EQ  x_change-value.
+            ENDIF.
+          ENDIF.
+          IF x_change-fieldname = 'LIFNR'.
+            READ TABLE gt_zkunnr ASSIGNING <lw_alv_zk> INDEX x_change-row_id.
+            IF sy-subrc EQ 0.
+              SELECT SINGLE name1
+                       FROM lfa1
+                       INTO <lw_alv_zk>-lr_na
+                      WHERE lifnr EQ x_change-value.
+              IF sy-subrc NE 0.
+                MESSAGE '该供应商不存在' TYPE 'E'.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+          IF x_change-fieldname = 'ZKUNNR'.
+            READ TABLE gt_zkunnr ASSIGNING <lw_alv_zk> INDEX x_change-row_id.
+            IF sy-subrc EQ 0.
+              SELECT SINGLE name1
+                       FROM kna1
+                       INTO <lw_alv_zk>-zkr_na
+                      WHERE kunnr EQ x_change-value.
+              IF sy-subrc NE 0.
+                MESSAGE '该客户不存在' TYPE 'E'.
+              ENDIF.
+
+              SELECT COUNT(*)
+                     FROM ztmm0008
+                    WHERE kunnr EQ <lw_alv_zk>-kunnr
+                      AND lifnr EQ <lw_alv_zk>-lifnr
+                      AND lifnr NE ''.
+              IF sy-subrc EQ 0.
+                SELECT COUNT(*)
+                        FROM ztmm0009
+                       WHERE kunnr EQ <lw_alv_zk>-kunnr
+                        AND zkunnr EQ x_change-value
+                        AND zkunnr NE ''.
+                IF sy-subrc EQ 0.
+                  READ TABLE gt_del_09 TRANSPORTING NO FIELDS WITH KEY kunnr = <lw_alv_zk>-kunnr
+                                                                      zkunnr = x_change-value.
+                  IF sy-subrc NE 0.
+                    MESSAGE '客户会员号已经绑定了供应商组且供应商不为空，则无法再次绑定供应商组或者供应商，需解绑原供应商组后重新绑定' TYPE 'E'.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+
+              SELECT COUNT(*)
+                FROM ztmm0009
+               WHERE kunnr  NE <lw_alv_zk>-kunnr
+                 AND zkunnr EQ x_change-value.
+              IF sy-subrc EQ 0.
+                READ TABLE gt_del_09 TRANSPORTING NO FIELDS WITH KEY kunnr = <lw_alv_zk>-kunnr
+                                                                    zkunnr = <lw_alv_zk>-zkunnr.
+                IF sy-subrc NE 0.
+                  MESSAGE '该会员号编码已绑定其他供应商组账号' TYPE 'E'.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ELSEIF r_kunnr EQ abap_true.
+          IF x_change-fieldname = 'KUNNR'.
+            SELECT COUNT(*)
+              FROM ztmm0007
+             WHERE kunnr EQ x_change-value
+               AND loevm EQ abap_false.
+            IF sy-subrc EQ 0.
+              READ TABLE gt_del_07 TRANSPORTING NO FIELDS WITH KEY kunnr = x_change-value.
+              IF sy-subrc NE 0.
+                MESSAGE '该供应商组账号已存在多重身份组中，请先删除' TYPE 'E'.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+    ENDCASE.
+    CALL METHOD g_grid->refresh_table_display
+      EXCEPTIONS
+        finished = 1
+        OTHERS   = 2.
+    CLEAR x_change.
+  ENDLOOP.
+ENDFORM.
