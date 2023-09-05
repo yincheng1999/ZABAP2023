@@ -1,0 +1,76 @@
+*&---------------------------------------------------------------------*
+*&  包含                ZPMM0002_TOP
+*&---------------------------------------------------------------------*
+TABLES:ztmm0007,ztmm0008,ztmm0009.
+
+TYPES:BEGIN OF ty_lifnr_alv,
+        checkbox,
+        lifnr    TYPE lfa1-lifnr,
+        lr_na    TYPE lfa1-name1,
+        kunnr    TYPE kunnr,
+        kr_na    TYPE kna1-name1,
+        style    TYPE lvc_t_styl,
+      END OF ty_lifnr_alv.
+DATA gt_lifnr TYPE TABLE OF ty_lifnr_alv.
+
+TYPES:BEGIN OF ty_zkunnr_alv,
+        checkbox,
+        zkunnr   TYPE kunnr,
+        zkr_na   TYPE kna1-name1,
+        lifnr    TYPE lfa1-lifnr,
+        lr_na    TYPE lfa1-name1,
+        kunnr    TYPE kunnr,
+        kr_na    TYPE kna1-name1,
+        style    TYPE lvc_t_styl,
+      END OF ty_zkunnr_alv.
+DATA gt_zkunnr TYPE TABLE OF ty_zkunnr_alv.
+
+TYPES:BEGIN OF ty_kunnr_alv,
+        checkbox,
+        kunnr    TYPE kunnr,
+        kr_na    TYPE name1,
+        loevm    TYPE loevm,
+        style    TYPE lvc_t_styl,
+      END OF ty_kunnr_alv.
+DATA gt_kunnr TYPE TABLE OF ty_kunnr_alv.
+
+TYPES:BEGIN OF ty_query_alv,
+        kunnr    TYPE kunnr,
+        kr_na    TYPE name1,
+        account  TYPE char10,
+        at_na    TYPE name1,
+        at_role  TYPE char10,
+        at_erdat TYPE erdat,
+        loevm    TYPE loevm,
+      END OF ty_query_alv.
+
+TYPES:BEGIN OF ty_file_ztmm0007,
+        kunnr TYPE ztmm0007-kunnr,
+        name1 TYPE ztmm0007-name1,
+      END OF ty_file_ztmm0007.
+
+TYPES:BEGIN OF ty_file_ztmm0008,
+        kunnr TYPE ztmm0008-kunnr,
+        lifnr TYPE ztmm0008-lifnr,
+      END OF ty_file_ztmm0008.
+
+TYPES:BEGIN OF ty_file_ztmm0009,
+        kunnr  TYPE ztmm0009-kunnr,
+        zkunnr TYPE ztmm0009-zkunnr,
+      END OF ty_file_ztmm0009.
+DATA:gt_file_07 TYPE TABLE OF ty_file_ztmm0007.
+DATA:gt_file_08 TYPE TABLE OF ty_file_ztmm0008.
+DATA:gt_file_09 TYPE TABLE OF ty_file_ztmm0009.
+
+DATA gt_query TYPE TABLE OF ty_query_alv.
+DATA gt_del_07   TYPE TABLE OF ztmm0007.
+DATA gt_del_08   TYPE TABLE OF ztmm0008.
+DATA gt_del_09   TYPE TABLE OF ztmm0009.
+DATA gt_sav_07   TYPE TABLE OF ztmm0007.
+DATA gt_sav_08   TYPE TABLE OF ztmm0008.
+DATA gt_sav_09   TYPE TABLE OF ztmm0009.
+DATA gt_log_07   TYPE TABLE OF ztmm0010.
+DATA gt_log_08   TYPE TABLE OF ztmm0011.
+DATA gt_log_09   TYPE TABLE OF ztmm0012.
+
+DATA g_grid TYPE REF TO cl_gui_alv_grid.
