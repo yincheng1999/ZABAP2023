@@ -1,0 +1,1065 @@
+*&---------------------------------------------------------------------*
+*&  包含                ZPMM0002_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  FRM_CONTRAL_SCREEN
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_contral_screen .
+  LOOP AT SCREEN.
+    CASE abap_true.
+      WHEN r_handle.
+        PERFORM frm_modify_secreen_input USING 'M2' '0' .
+        IF r_lifnr EQ abap_true.
+          PERFORM frm_modify_secreen_input USING 'M1' '1' .
+          PERFORM frm_modify_secreen_input USING 'M3' '0' .
+          PERFORM frm_modify_secreen_input USING 'M4' '0' .
+        ELSEIF r_zkunnr EQ abap_true.
+          PERFORM frm_modify_secreen_input USING 'M3' '1' .
+          PERFORM frm_modify_secreen_input USING 'M1' '0' .
+          PERFORM frm_modify_secreen_input USING 'M4' '0' .
+        ELSEIF r_kunnr EQ abap_true.
+          PERFORM frm_modify_secreen_input USING 'M1' '0' .
+          PERFORM frm_modify_secreen_input USING 'M3' '0' .
+          PERFORM frm_modify_secreen_input USING 'M4' '1' .
+        ENDIF.
+      WHEN r_query.
+        PERFORM frm_modify_secreen_input USING 'M2' '1' .
+        PERFORM frm_modify_secreen_input USING 'M1' '0' .
+        PERFORM frm_modify_secreen_input USING 'M3' '0' .
+        PERFORM frm_modify_secreen_input USING 'M4' '0' .
+    ENDCASE.
+    MODIFY SCREEN.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_MODIFY_SECREEN_INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      <--P_SCREEN  text
+*----------------------------------------------------------------------*
+FORM frm_modify_secreen_input  USING pv_group1 TYPE screen-group1
+                                     pv_input  TYPE screen-input.
+  IF screen-group1 = pv_group1.
+    screen-input = pv_input.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_GET_DATA_LIFNR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_get_data_lifnr .
+  SELECT a~kunnr
+         a~lifnr
+         b~name1 AS lr_na
+         c~name1 AS kr_na
+    FROM ztmm0008 AS a
+    LEFT JOIN lfa1 AS b ON a~lifnr EQ b~lifnr
+    LEFT JOIN ztmm0007 AS c ON a~kunnr EQ c~kunnr
+    INTO CORRESPONDING FIELDS OF TABLE gt_lifnr
+    WHERE a~kunnr IN s_kr_08
+      AND a~lifnr IN s_lr_08.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_GET_DATA_ZKUNNR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_get_data_zkunnr .
+  SELECT a~kunnr,
+         a~zkunnr,
+         b1~name1 AS kr_na,
+         b2~name1 AS zkr_na,
+         c~lifnr,
+         d~name1  AS lr_na
+    FROM ztmm0009 AS a
+    LEFT JOIN ztmm0007 AS b1 ON a~kunnr  EQ b1~kunnr
+    LEFT JOIN kna1     AS b2 ON a~zkunnr EQ b2~kunnr
+    LEFT JOIN ztmm0008 AS c  ON a~kunnr  EQ c~kunnr
+    LEFT JOIN lfa1     AS d  ON c~lifnr  EQ d~lifnr
+    INTO CORRESPONDING FIELDS OF TABLE @gt_zkunnr
+    WHERE a~kunnr  IN @s_kr_09
+      AND a~zkunnr IN @s_zkr_09.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_GET_DATA_KUNNR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_get_data_kunnr .
+  SELECT kunnr
+         name1 AS kr_na
+         loevm
+    FROM ztmm0007
+    INTO CORRESPONDING FIELDS OF TABLE gt_kunnr
+   WHERE kunnr IN s_kr_07.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_get_data .
+  DATA:lv_role_kr TYPE char10 VALUE '客户'.
+  DATA:lv_role_lr TYPE char10 VALUE '伙伴/供应商'.
+  CLEAR gt_query.
+  SELECT a~kunnr,
+         a~name1 AS kr_na,
+         a~loevm,
+         b~lifnr AS account,
+         c~name1 AS at_na,
+         c~erdat AS at_erdat,
+        CASE WHEN b~lifnr NE ' ' THEN @lv_role_lr ELSE ' ' END AS at_role
+    FROM ztmm0007 AS a
+    LEFT JOIN ztmm0008 AS b ON a~kunnr EQ b~kunnr
+    LEFT JOIN lfa1 AS c ON c~lifnr EQ b~lifnr
+    APPENDING CORRESPONDING FIELDS OF TABLE @gt_query
+    WHERE a~kunnr IN @s_kunnr
+      AND b~lifnr IN @s_lr_08.
+
+  SELECT a~kunnr,
+         a~name1  AS kr_na,
+         a~loevm,
+         b~zkunnr AS account,
+         c~name1  AS at_na,
+         c~erdat  AS at_erdat,
+*        @lv_role_kr AS at_role,
+        CASE WHEN b~zkunnr NE ' ' THEN @lv_role_kr ELSE ' ' END AS at_role
+    FROM ztmm0007 AS a
+    LEFT JOIN ztmm0009 AS b ON a~kunnr EQ b~kunnr
+    LEFT JOIN kna1 AS c ON c~kunnr EQ b~zkunnr
+    APPENDING CORRESPONDING FIELDS OF TABLE @gt_query
+    WHERE a~kunnr  IN @s_kunnr
+      AND b~zkunnr IN @s_zkr_09.
+
+  SORT gt_query BY kunnr.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_ALV_DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_alv_display .
+  CASE abap_true.
+    WHEN r_handle.
+      IF r_lifnr EQ abap_true.
+        PERFORM call_alv TABLES gt_lifnr.
+      ELSEIF r_zkunnr EQ abap_true.
+        PERFORM call_alv TABLES gt_zkunnr.
+      ELSEIF r_kunnr EQ abap_true.
+        PERFORM call_alv TABLES gt_kunnr.
+      ENDIF.
+    WHEN r_query.
+      PERFORM call_alv TABLES gt_query.
+  ENDCASE.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  CALL_ALV
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_GT_LIFNR  text
+*----------------------------------------------------------------------*
+FORM call_alv  TABLES pt_alv.
+  DATA ls_layout    TYPE lvc_s_layo.
+  DATA lt_events    TYPE slis_t_event.
+  DATA lt_field_tab TYPE lvc_t_fcat.
+
+  PERFORM frm_set_alv CHANGING ls_layout lt_events lt_field_tab.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+    EXPORTING
+      i_callback_program       = sy-repid
+      is_layout_lvc            = ls_layout
+      it_fieldcat_lvc          = lt_field_tab
+      i_callback_user_command  = 'USER_COMMAND'      "自定义命令行
+      i_callback_pf_status_set = 'PF_STATUS_SET'     "自定义按钮
+      it_events                = lt_events
+      i_save                   = 'A'
+    TABLES
+      t_outtab                 = pt_alv
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_SET_ALV
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      <--P_LS_LAYOUT  text
+*      <--P_LT_FIELD_TAB  text
+*----------------------------------------------------------------------*
+FORM frm_set_alv  CHANGING cs_layout    TYPE lvc_s_layo
+                           ct_events    TYPE slis_t_event
+                           ct_field_tab TYPE lvc_t_fcat.
+  cs_layout-cwidth_opt = abap_true.
+  cs_layout-sel_mode   = abap_true.
+  CASE abap_true.
+    WHEN r_handle.
+      cs_layout-stylefname  = 'STYLE'.
+      APPEND INITIAL LINE TO ct_events ASSIGNING FIELD-SYMBOL(<lw_events>).
+      <lw_events>-name = 'CALLER_EXIT'. "增加回车事件
+      <lw_events>-form = 'FRM_REGISTER_EVENTS'. "回车事件的调用form名
+      PERFORM frm_set_alv_field USING 'CHECKBOX'  '选择框'     '10' '' ''abap_true CHANGING ct_field_tab.
+      IF r_lifnr EQ abap_true.
+        PERFORM frm_set_alv_field USING 'LIFNR'  '供应商编码'    '10' 'LIFNR' 'LFA1'    abap_true   CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'LR_NA'  '供应商名称'    '10' '' ''             abap_false  CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'KUNNR'  '供应商组账号'  '12' '' ''             abap_false  CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'KR_NA'  '供应商组名称'  '12' '' ''             abap_false  CHANGING ct_field_tab.
+      ELSEIF r_zkunnr EQ abap_true.
+        PERFORM frm_set_alv_field USING 'ZKUNNR' '会员号编码'    '10' 'KUNNR' 'KNA1'     abap_false CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'ZKR_NA' '公司名称'      '10' ''      ''         abap_false CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'LIFNR'  '供应商编码'    '10' 'LIFNR' 'LFA1'     abap_false CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'LR_NA'  '供应商名称'    '10' ''      ''         abap_false CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'KUNNR'  '供应商组账号'  '12' ''    ''           abap_false CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'KR_NA'  '供应商组名称'  '12' ''    ''           abap_false CHANGING ct_field_tab.
+      ELSEIF r_kunnr EQ abap_true.
+        PERFORM frm_set_alv_field USING 'KUNNR'  '供应商组账号'  '12' ''    '' abap_false CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'KR_NA'  '供应商组名称'  '12' ''    '' abap_true  CHANGING ct_field_tab.
+        PERFORM frm_set_alv_field USING 'LOEVM'  '删除标识'      '8'  ''    '' abap_true  CHANGING ct_field_tab.
+      ENDIF.
+    WHEN r_query.
+      PERFORM frm_set_alv_field USING 'KUNNR'    '供应商组账号'       '12' ''    ''abap_false CHANGING ct_field_tab.
+      PERFORM frm_set_alv_field USING 'KR_NA'    '供应商组名称'       '12' ''    ''abap_false CHANGING ct_field_tab.
+      PERFORM frm_set_alv_field USING 'ACCOUNT'  '账号'               '12' ''    ''abap_false CHANGING ct_field_tab.
+      PERFORM frm_set_alv_field USING 'AT_NA'    '名称'               '12' ''    ''abap_false CHANGING ct_field_tab.
+      PERFORM frm_set_alv_field USING 'AT_ROLE'  '角色'               '12' ''    ''abap_false CHANGING ct_field_tab.
+      PERFORM frm_set_alv_field USING 'AT_ERDAT' '账号创建时间'       '12' ''    ''abap_false CHANGING ct_field_tab.
+      PERFORM frm_set_alv_field USING 'LOEVM'    '是否合作(账号停用)' '12' ''    ''abap_false CHANGING ct_field_tab.
+  ENDCASE.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_SET_ALV_FIELD
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_set_alv_field USING    cv_fieldname  TYPE lvc_fname
+                                cv_coltext    TYPE lvc_txtcol
+                                cv_outputlen  TYPE lvc_outlen
+                                cv_ref_field  TYPE lvc_rfname
+                                cv_ref_table  TYPE lvc_rtname
+                                cv_edit       TYPE lvc_edit
+                       CHANGING ct_field_tab  TYPE lvc_t_fcat.
+
+  DATA ls_field TYPE lvc_s_fcat.
+  ls_field-fieldname = cv_fieldname.
+  ls_field-ref_field = cv_ref_field.
+  ls_field-ref_table = cv_ref_table.
+  ls_field-coltext   = cv_coltext.
+  ls_field-scrtext_l = cv_coltext.
+  ls_field-scrtext_m = cv_coltext.
+  ls_field-scrtext_s = cv_coltext.
+  ls_field-outputlen = cv_outputlen.
+  IF  ls_field-fieldname = 'CHECKBOX' OR ls_field-fieldname = 'LOEVM'.
+    ls_field-checkbox  = abap_true.
+  ENDIF.
+  ls_field-edit  = cv_edit.
+  IF  ls_field-fieldname = 'KUNNR'.
+    ls_field-f4availabl = 'X'. "这个一定要打上X
+  ENDIF.
+  APPEND ls_field TO ct_field_tab.
+ENDFORM.
+*---------------------------------------------------------------------*
+* FORM SET_PF_STATUS *
+*---------------------------------------------------------------------*
+* ........ *
+*---------------------------------------------------------------------*
+* --> EXTAB *
+*---------------------------------------------------------------------*
+FORM pf_status_set USING extab TYPE slis_t_extab.
+  DATA: lt_exclude TYPE TABLE OF sy-ucomm,
+        lw_exclude TYPE sy-ucomm.
+  DATA  lv_flag.
+  AUTHORITY-CHECK OBJECT 'B_BUPA_RLT' ID 'ACTVT' FIELD '01'.
+  IF sy-subrc NE 0.
+    lv_flag = abap_true.
+  ENDIF.
+  AUTHORITY-CHECK OBJECT 'B_BUPA_RLT' ID 'ACTVT' FIELD '02'.
+  IF sy-subrc NE 0.
+    lv_flag = abap_true.
+  ENDIF.
+  IF r_query EQ abap_true OR lv_flag EQ abap_true..
+    MOVE '&ZCREATE' TO lw_exclude.
+    APPEND lw_exclude TO lt_exclude.
+    MOVE '&ZDELETE' TO lw_exclude.
+    APPEND lw_exclude TO lt_exclude.
+    MOVE '&ZSAVE'   TO lw_exclude.
+    APPEND lw_exclude TO lt_exclude.
+    MOVE '&ZBATCH'   TO lw_exclude.
+    APPEND lw_exclude TO lt_exclude.
+    MOVE '&ZEXCEL'   TO lw_exclude.
+    APPEND lw_exclude TO lt_exclude.
+  ENDIF.
+  SET PF-STATUS 'STATUS' EXCLUDING lt_exclude.
+ENDFORM.                    "set_pf_status
+*&---------------------------------------------------------------------*
+* FORM user_command *
+*&---------------------------------------------------------------------*
+* ........ *
+*&---------------------------------------------------------------------*
+* --> UCOMM *
+* --> SELFIELD *
+*&---------------------------------------------------------------------*
+FORM user_command USING ucomm LIKE sy-ucomm
+                     selfield TYPE slis_selfield.
+*获取屏幕修改后的值
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = g_grid.
+  CALL METHOD g_grid->check_changed_data.
+
+  selfield-refresh = 'X'. "刷新参数
+
+  DATA lv_ucomm TYPE sy-ucomm.
+  lv_ucomm = sy-ucomm.
+  CASE lv_ucomm.
+    WHEN '&ZCREATE'.
+      PERFORM frm_zcreate.
+    WHEN '&ZDELETE'.
+      PERFORM frm_zdelete.
+    WHEN '&ZSAVE'.
+      PERFORM frm_zsave.
+    WHEN '&ZBATCH'.
+      PERFORM frm_zbatch.
+    WHEN '&ZEXCEL'.
+      PERFORM frm_download.
+    WHEN '&ZALL'.
+      PERFORM frm_zall.
+    WHEN '&ZSAL'.
+      PERFORM frm_zsal.
+  ENDCASE.
+
+  DATA lv_stbl TYPE lvc_s_stbl.
+  lv_stbl-row = 'X'." 基于行的稳定刷新
+  lv_stbl-col = 'X'." 基于列稳定刷新
+  CALL METHOD g_grid->refresh_table_display
+    EXPORTING
+      is_stable = lv_stbl.
+ENDFORM.                    "user_command.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_ZCREATE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_zcreate .
+  DATA: lw_lifnr  TYPE ty_lifnr_alv,
+        lw_zkunnr TYPE ty_zkunnr_alv,
+        lw_kunnr  TYPE ty_kunnr_alv.
+  DATA  lt_style  TYPE lvc_t_styl.
+  DATA: ls_stylerow TYPE lvc_s_styl.
+  CASE abap_true.
+    WHEN r_handle.
+      IF r_lifnr EQ abap_true.
+        ls_stylerow-fieldname = 'KUNNR'.
+        ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+        APPEND ls_stylerow TO lt_style.
+
+        ls_stylerow-fieldname = 'LIFNR'.
+        ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+        APPEND ls_stylerow TO lt_style.
+
+        lw_lifnr-style = lt_style.
+        INSERT lw_lifnr INTO gt_lifnr  INDEX 1.
+      ELSEIF r_zkunnr EQ abap_true.
+        ls_stylerow-fieldname = 'KUNNR'.
+        ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+        APPEND ls_stylerow TO lt_style.
+
+        ls_stylerow-fieldname = 'ZKUNNR'.
+        ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+        APPEND ls_stylerow TO lt_style.
+
+        lw_zkunnr-style = lt_style.
+        INSERT lw_zkunnr INTO gt_zkunnr INDEX 1.
+      ELSEIF r_kunnr EQ abap_true.
+        ls_stylerow-fieldname = 'KUNNR'.
+        ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+        APPEND ls_stylerow TO lw_kunnr-style.
+
+        INSERT lw_kunnr INTO gt_kunnr  INDEX 1.
+      ENDIF.
+  ENDCASE.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_ZDELETE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_zdelete .
+  CASE abap_true.
+    WHEN r_handle.
+      IF r_lifnr EQ abap_true.
+        LOOP AT gt_lifnr  ASSIGNING FIELD-SYMBOL(<lw_lifnr>)  WHERE checkbox EQ abap_true.
+          APPEND INITIAL LINE TO gt_del_08 ASSIGNING FIELD-SYMBOL(<lw_0008>).
+          <lw_0008>-kunnr = <lw_lifnr>-kunnr.
+          <lw_0008>-lifnr = <lw_lifnr>-lifnr.
+
+          APPEND INITIAL LINE TO gt_log_08 ASSIGNING FIELD-SYMBOL(<lw_log_08>).
+          <lw_log_08>-kunnr = <lw_lifnr>-kunnr.
+          <lw_log_08>-lifnr = <lw_lifnr>-lifnr.
+          <lw_log_08>-loevm = abap_true.
+          <lw_log_08>-aedat = sy-datum.
+          <lw_log_08>-aezet = sy-uzeit.
+          <lw_log_08>-aenam = sy-uname.
+        ENDLOOP.
+        DELETE gt_lifnr WHERE checkbox EQ abap_true.
+      ELSEIF r_zkunnr EQ abap_true.
+        LOOP AT gt_zkunnr ASSIGNING FIELD-SYMBOL(<lw_zkunnr>) WHERE checkbox EQ abap_true.
+          APPEND INITIAL LINE TO gt_del_09 ASSIGNING FIELD-SYMBOL(<lw_0009>).
+          <lw_0009>-kunnr  = <lw_zkunnr>-kunnr.
+          <lw_0009>-zkunnr = <lw_zkunnr>-zkunnr.
+
+          APPEND INITIAL LINE TO gt_log_09 ASSIGNING FIELD-SYMBOL(<lw_log_09>).
+          <lw_log_09>-kunnr  = <lw_zkunnr>-kunnr.
+          <lw_log_09>-zkunnr = <lw_zkunnr>-zkunnr.
+          <lw_log_09>-loevm  = abap_true.
+          <lw_log_09>-aedat  = sy-datum.
+          <lw_log_09>-aezet  = sy-uzeit.
+          <lw_log_09>-aenam  = sy-uname.
+        ENDLOOP.
+        DELETE gt_zkunnr WHERE checkbox EQ abap_true.
+      ELSEIF r_kunnr EQ abap_true.
+        LOOP AT gt_kunnr  ASSIGNING FIELD-SYMBOL(<lw_kunnr>)  WHERE checkbox EQ abap_true.
+          SELECT COUNT(*)
+                 FROM ztmm0008
+                WHERE kunnr = <lw_kunnr>-kunnr.
+          IF sy-subrc EQ 0.
+            MESSAGE '供应商组账号' && <lw_kunnr>-kunnr && '绑定中，不可删除' TYPE 'E'.
+          ENDIF.
+
+          SELECT COUNT(*)
+                 FROM ztmm0009
+                WHERE kunnr = <lw_kunnr>-kunnr.
+          IF sy-subrc EQ 0.
+            MESSAGE '供应商组账号' && <lw_kunnr>-kunnr && '绑定中，不可删除' TYPE 'E'.
+          ENDIF.
+        ENDLOOP.
+
+        LOOP AT gt_kunnr  ASSIGNING <lw_kunnr>  WHERE checkbox EQ abap_true.
+          APPEND INITIAL LINE TO gt_del_07 ASSIGNING FIELD-SYMBOL(<lw_0007>).
+          <lw_0007>-kunnr  = <lw_kunnr>-kunnr.
+          <lw_0007>-name1  = <lw_kunnr>-kr_na .
+          <lw_0007>-loevm  = <lw_kunnr>-loevm .
+
+          APPEND INITIAL LINE TO gt_log_07 ASSIGNING FIELD-SYMBOL(<lw_log_07>).
+          <lw_log_07>-kunnr = <lw_kunnr>-kunnr.
+          <lw_log_07>-name1 = <lw_kunnr>-kr_na.
+          <lw_log_07>-loevm = abap_true.
+          <lw_log_07>-ernam = sy-uname.
+          <lw_log_07>-erdat = sy-datum.
+          <lw_log_07>-erzet = sy-uzeit.
+          <lw_log_07>-aedat = sy-datum.
+          <lw_log_07>-aezet = sy-uzeit.
+          <lw_log_07>-aenam = sy-uname.
+        ENDLOOP.
+        DELETE gt_kunnr WHERE checkbox EQ abap_true.
+      ENDIF.
+  ENDCASE.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_ZSAVE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_zsave .
+  CASE abap_true.
+    WHEN r_handle.
+      IF r_lifnr EQ abap_true.
+        LOOP AT gt_lifnr  ASSIGNING FIELD-SYMBOL(<lw_lifnr>).
+          IF <lw_lifnr>-lifnr IS INITIAL.
+            MESSAGE '请输入供应商编码' TYPE 'E'.
+          ENDIF.
+          IF <lw_lifnr>-kunnr IS INITIAL.
+            MESSAGE '请输入供应商组账号' TYPE 'E'.
+          ENDIF.
+        ENDLOOP.
+
+        LOOP AT gt_lifnr  ASSIGNING <lw_lifnr>.
+          APPEND INITIAL LINE TO gt_sav_08 ASSIGNING FIELD-SYMBOL(<lw_0008>).
+          <lw_0008>-kunnr = <lw_lifnr>-kunnr.
+          <lw_0008>-lifnr = <lw_lifnr>-lifnr.
+
+          APPEND INITIAL LINE TO gt_log_08 ASSIGNING FIELD-SYMBOL(<lw_log_08>).
+          <lw_log_08>-kunnr = <lw_log_08>-kunnr.
+          <lw_log_08>-lifnr = <lw_log_08>-lifnr.
+          <lw_log_08>-loevm = abap_true.
+          <lw_log_08>-aedat = sy-datum.
+          <lw_log_08>-aezet = sy-uzeit.
+          <lw_log_08>-aenam = sy-uname.
+        ENDLOOP.
+      ELSEIF r_zkunnr EQ abap_true.
+        LOOP AT gt_zkunnr ASSIGNING FIELD-SYMBOL(<lw_zkunnr>).
+          IF <lw_zkunnr>-zkunnr IS INITIAL.
+            MESSAGE '请输入会员号编码' TYPE 'E'.
+          ENDIF.
+          IF <lw_zkunnr>-kunnr IS INITIAL.
+            MESSAGE '请输入供应商组账号' TYPE 'E'.
+          ENDIF.
+        ENDLOOP.
+
+        LOOP AT gt_zkunnr ASSIGNING <lw_zkunnr>.
+          APPEND INITIAL LINE TO gt_sav_09 ASSIGNING FIELD-SYMBOL(<lw_0009>).
+          <lw_0009>-kunnr  = <lw_zkunnr>-kunnr.
+          <lw_0009>-zkunnr = <lw_zkunnr>-zkunnr.
+
+          APPEND INITIAL LINE TO gt_log_09 ASSIGNING FIELD-SYMBOL(<lw_log_09>).
+          <lw_log_09>-kunnr  = <lw_log_09>-kunnr.
+          <lw_log_09>-zkunnr = <lw_log_09>-zkunnr.
+          <lw_log_09>-loevm  = abap_true.
+          <lw_log_09>-aedat  = sy-datum.
+          <lw_log_09>-aezet  = sy-uzeit.
+          <lw_log_09>-aenam  = sy-uname.
+        ENDLOOP.
+      ELSEIF r_kunnr EQ abap_true.
+        LOOP AT gt_kunnr ASSIGNING FIELD-SYMBOL(<lw_kunnr>).
+          IF <lw_kunnr>-kr_na IS INITIAL.
+            MESSAGE '请输入供应商组名称' TYPE 'E'.
+          ENDIF.
+          IF <lw_kunnr>-kunnr IS INITIAL.
+            MESSAGE '请输入供应商组账号' TYPE 'E'.
+          ENDIF.
+        ENDLOOP.
+
+        LOOP AT gt_kunnr  ASSIGNING <lw_kunnr>.
+          APPEND INITIAL LINE TO gt_sav_07 ASSIGNING FIELD-SYMBOL(<lw_0007>).
+          <lw_0007>-kunnr  = <lw_kunnr>-kunnr.
+          <lw_0007>-name1  = <lw_kunnr>-kr_na .
+          <lw_0007>-loevm  = <lw_kunnr>-loevm .
+
+          APPEND INITIAL LINE TO gt_log_07 ASSIGNING FIELD-SYMBOL(<lw_log_07>).
+          <lw_log_07>-kunnr = <lw_log_07>-kunnr.
+          <lw_log_07>-name1 = <lw_log_07>-name1.
+          <lw_log_07>-loevm = abap_true.
+          <lw_log_07>-ernam = sy-uname.
+          <lw_log_07>-erdat = sy-datum.
+          <lw_log_07>-erzet = sy-uzeit.
+          <lw_log_07>-aedat = sy-datum.
+          <lw_log_07>-aezet = sy-uzeit.
+          <lw_log_07>-aenam = sy-uname.
+        ENDLOOP.
+      ENDIF.
+  ENDCASE.
+
+  DELETE ztmm0007 FROM TABLE gt_del_07.
+  DELETE ztmm0008 FROM TABLE gt_del_08.
+  DELETE ztmm0009 FROM TABLE gt_del_09.
+
+  MODIFY ztmm0007 FROM TABLE gt_sav_07.
+  MODIFY ztmm0008 FROM TABLE gt_sav_08.
+  MODIFY ztmm0009 FROM TABLE gt_sav_09.
+
+  DATA lv_zuid_011 TYPE zeuid.
+  DATA lv_zuid_012 TYPE zeuid.
+  SELECT SINGLE MAX( zuid )
+         FROM ztmm0011
+         INTO lv_zuid_011.
+
+  SELECT SINGLE MAX( zuid )
+         FROM ztmm0012
+         INTO lv_zuid_012.
+
+  LOOP AT gt_log_08 ASSIGNING <lw_log_08>.
+    lv_zuid_011 = lv_zuid_011 + 1.
+    <lw_log_08>-zuid = lv_zuid_011.
+  ENDLOOP.
+
+  LOOP AT gt_log_09 ASSIGNING <lw_log_09>.
+    lv_zuid_012 = lv_zuid_012 + 1.
+    <lw_log_09>-zuid = lv_zuid_012.
+  ENDLOOP.
+
+  MODIFY ztmm0010 FROM TABLE gt_log_07.
+  MODIFY ztmm0011 FROM TABLE gt_log_08.
+  MODIFY ztmm0012 FROM TABLE gt_log_09.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_REFRESH_GT_ZKUNNR_DES
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_refresh_gt_zkunnr_des .
+  "zkunnr lifnr kunnr
+  IF gt_zkunnr IS NOT INITIAL.
+    SELECT lifnr,
+           name1
+      FROM lfa1
+      INTO TABLE @DATA(lt_lfa1)
+      FOR ALL ENTRIES IN @gt_zkunnr
+     WHERE lifnr EQ @gt_zkunnr-lifnr.
+  ENDIF.
+
+  IF gt_zkunnr IS NOT INITIAL.
+    SELECT kunnr,
+           name1
+      FROM kna1
+      INTO TABLE @DATA(lt_kna1)
+      FOR ALL ENTRIES IN @gt_zkunnr
+     WHERE kunnr EQ @gt_zkunnr-kunnr.
+  ENDIF.
+
+  IF gt_zkunnr IS NOT INITIAL.
+    SELECT kunnr
+           name1
+      FROM kna1
+      APPENDING TABLE lt_kna1
+      FOR ALL ENTRIES IN gt_zkunnr
+     WHERE kunnr EQ gt_zkunnr-zkunnr.
+  ENDIF.
+
+  SORT lt_lfa1 BY lifnr.
+  SORT lt_kna1 BY kunnr.
+  LOOP AT gt_zkunnr ASSIGNING FIELD-SYMBOL(<lw_zkunnr>) WHERE style IS NOT INITIAL.
+    READ TABLE lt_lfa1 ASSIGNING FIELD-SYMBOL(<lw_lfa1>) WITH KEY lifnr = <lw_zkunnr>-lifnr BINARY SEARCH.
+    IF sy-subrc EQ 0.
+      <lw_zkunnr>-lr_na = <lw_lfa1>-name1.
+    ENDIF.
+
+    READ TABLE lt_kna1 ASSIGNING FIELD-SYMBOL(<lw_kna1>) WITH KEY kunnr = <lw_zkunnr>-kunnr BINARY SEARCH.
+    IF sy-subrc EQ 0.
+      <lw_zkunnr>-kr_na = <lw_kna1>-name1.
+    ENDIF.
+
+    READ TABLE lt_kna1 ASSIGNING <lw_kna1> WITH KEY kunnr = <lw_zkunnr>-zkunnr BINARY SEARCH.
+    IF sy-subrc EQ 0.
+      <lw_zkunnr>-zkr_na = <lw_kna1>-name1.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_REFRESH_GT_KUNNR_DES
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_refresh_gt_kunnr_des .
+  "kunnr
+  IF gt_kunnr IS NOT INITIAL.
+    SELECT kunnr,
+           name1
+      FROM kna1
+      INTO TABLE @DATA(lt_kna1)
+      FOR ALL ENTRIES IN @gt_kunnr
+     WHERE kunnr EQ @gt_kunnr-kunnr.
+  ENDIF.
+
+  SORT lt_kna1 BY name1.
+  LOOP AT gt_kunnr ASSIGNING FIELD-SYMBOL(<lw_kunnr>) WHERE style IS NOT INITIAL.
+    READ TABLE lt_kna1 ASSIGNING FIELD-SYMBOL(<lw_kna1>) WITH KEY kunnr = <lw_kunnr>-kunnr BINARY SEARCH.
+    IF sy-subrc EQ 0.
+      <lw_kunnr>-kr_na = <lw_kna1>-name1.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  register_events
+*&---------------------------------------------------------------------*
+*       注册回车事件
+*----------------------------------------------------------------------
+FORM frm_register_events USING e_grid TYPE slis_data_caller_exit.
+
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = g_grid.
+
+  DATA: gr_event_handler TYPE REF TO lcl_event_receiver.
+  CREATE OBJECT gr_event_handler.
+
+  CALL METHOD g_grid->register_edit_event
+    EXPORTING
+      i_event_id = cl_gui_alv_grid=>mc_evt_enter
+    EXCEPTIONS
+      error      = 1
+      OTHERS     = 2.
+
+  SET HANDLER gr_event_handler->handle_data_changed FOR g_grid.
+
+  SET HANDLER gr_event_handler->handle_f4 FOR g_grid.
+
+  DATA:lt_f4 TYPE lvc_t_f4,
+       ls_f4 TYPE lvc_s_f4.
+
+  ls_f4-fieldname  = 'KUNNR'.   "窗口时间参数（需要定义F4帮助按钮的字段）
+  ls_f4-register   = 'X'.
+  ls_f4-getbefore  = 'X'.
+  ls_f4-chngeafter = 'X'.
+  INSERT ls_f4 INTO TABLE lt_f4.
+
+  CALL METHOD g_grid->register_f4_for_fields
+    EXPORTING
+      it_f4 = lt_f4[].
+
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM. "register_events
+*&---------------------------------------------------------------------*
+*&      Form  FRM_ZBATCH
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_zbatch .
+  DATA lv_file TYPE rlgrap-filename.
+  PERFORM frm_open_file USING lv_file.
+  PERFORM frm_imp_data  USING lv_file..
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_OPEN_FILE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_open_file USING pv_file TYPE rlgrap-filename.
+  CALL FUNCTION 'WS_FILENAME_GET'
+    EXPORTING
+      def_path         = 'C:\'
+      mask             = ',Excel,*.XLSX;*.XLS.;*.XLSM'
+      mode             = '0'
+      title            = 'Please select the file'
+    IMPORTING
+      filename         = pv_file
+    EXCEPTIONS
+      inv_winsys       = 1
+      no_batch         = 2
+      selection_cancel = 3
+      selection_error  = 4
+      OTHERS           = 5.
+  IF sy-subrc <> 0.
+    MESSAGE 'Error selecting file' TYPE 'S' DISPLAY LIKE 'E'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_IMP_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_imp_data USING pv_file TYPE rlgrap-filename.
+  DATA:lt_exc_data TYPE TABLE OF alsmex_tabline,
+       ls_exc_data TYPE alsmex_tabline.
+
+  DATA: lv_tabix LIKE sy-tabix.
+
+  IF pv_file IS INITIAL.
+    MESSAGE '请选择文件导入' TYPE 'S' DISPLAY LIKE 'E'.
+    EXIT.
+  ENDIF.
+
+  CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+    EXPORTING
+      filename                = pv_file
+      i_begin_col             = 1 "开始列
+      i_begin_row             = 2 "开始行
+      i_end_col               = 2
+      i_end_row               = 9999 "max 65535
+    TABLES
+      intern                  = lt_exc_data
+    EXCEPTIONS
+      inconsistent_parameters = 1
+      upload_ole              = 2
+      OTHERS                  = 3.
+
+  FIELD-SYMBOLS <fs_value>.
+  DATA:lv_index   TYPE sy-tabix,
+       ls_file_07 TYPE ty_file_ztmm0007,
+       ls_file_08 TYPE ty_file_ztmm0008,
+       ls_file_09 TYPE ty_file_ztmm0009.
+
+  DATA: lw_lifnr  TYPE ty_lifnr_alv,
+        lw_zkunnr TYPE ty_zkunnr_alv,
+        lw_kunnr  TYPE ty_kunnr_alv.
+  DATA  lt_style  TYPE lvc_t_styl.
+  DATA: ls_stylerow TYPE lvc_s_styl.
+  CLEAR: gt_file_07,
+         gt_file_08,
+         gt_file_09.
+
+  LOOP AT lt_exc_data INTO ls_exc_data.
+    lv_index = ls_exc_data-col.
+    CASE abap_true.
+      WHEN r_handle.
+        IF r_lifnr EQ abap_true.
+          ASSIGN COMPONENT lv_index OF STRUCTURE ls_file_08 TO <fs_value>."
+          MOVE ls_exc_data-value TO <fs_value>.
+        ELSEIF r_zkunnr EQ abap_true.
+          ASSIGN COMPONENT lv_index OF STRUCTURE ls_file_09 TO <fs_value>."
+          MOVE ls_exc_data-value TO <fs_value>.
+        ELSEIF r_kunnr EQ abap_true.
+          ASSIGN COMPONENT lv_index OF STRUCTURE ls_file_07 TO <fs_value>."
+          MOVE ls_exc_data-value TO <fs_value>.
+        ENDIF.
+    ENDCASE.
+    AT END OF row.
+      CASE abap_true.
+        WHEN r_handle.
+          IF r_lifnr EQ abap_true.
+            APPEND ls_file_08 TO gt_file_08.
+
+            CLEAR:lt_style.
+            ls_stylerow-fieldname = 'KUNNR'.
+            ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+            APPEND ls_stylerow TO lt_style.
+
+            ls_stylerow-fieldname = 'LIFNR'.
+            ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+            APPEND ls_stylerow TO lt_style.
+
+            lw_lifnr-style = lt_style.
+            lw_lifnr-lifnr = ls_file_08-lifnr.
+            lw_lifnr-kunnr = ls_file_08-kunnr.
+
+            SELECT SINGLE name1
+                   FROM lfa1
+                   INTO lw_lifnr-lr_na
+                  WHERE lifnr EQ lw_lifnr-lifnr.
+
+            SELECT SINGLE name1
+                   FROM ztmm0007
+                   INTO lw_lifnr-kr_na
+                  WHERE kunnr EQ lw_lifnr-kunnr.
+            INSERT lw_lifnr INTO gt_lifnr  INDEX 1.
+
+            CLEAR:ls_file_08,lw_lifnr.
+          ELSEIF r_zkunnr EQ abap_true.
+            APPEND ls_file_09 TO gt_file_09.
+
+            CLEAR:lt_style.
+            ls_stylerow-fieldname = 'KUNNR'.
+            ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+            APPEND ls_stylerow TO lt_style.
+
+            ls_stylerow-fieldname = 'ZKUNNR'.
+            ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+            APPEND ls_stylerow TO lt_style.
+
+            lw_zkunnr-style = lt_style.
+            lw_zkunnr-kunnr  = ls_file_09-kunnr.
+            lw_zkunnr-zkunnr = ls_file_09-zkunnr.
+
+            SELECT SINGLE lifnr
+                   FROM ztmm0008
+                   INTO lw_zkunnr-lifnr
+                  WHERE kunnr EQ lw_zkunnr-kunnr.
+
+            SELECT SINGLE name1
+                   FROM lfa1
+                   INTO lw_zkunnr-lr_na
+                  WHERE lifnr EQ lw_zkunnr-lifnr.
+
+            SELECT SINGLE name1
+                   FROM ztmm0007
+                   INTO lw_zkunnr-kr_na
+                  WHERE kunnr EQ lw_zkunnr-kunnr.
+
+            SELECT SINGLE name1
+                   FROM kna1
+                   INTO lw_zkunnr-zkr_na
+                  WHERE kunnr EQ lw_zkunnr-zkr_na.
+
+            INSERT lw_zkunnr INTO gt_zkunnr INDEX 1.
+
+            CLEAR:ls_file_09,lw_zkunnr.
+          ELSEIF r_kunnr EQ abap_true.
+            APPEND ls_file_07 TO gt_file_07.
+
+            CLEAR:lt_style.
+            ls_stylerow-fieldname = 'KUNNR'.
+            ls_stylerow-style = cl_gui_alv_grid=>mc_style_enabled.
+
+            lw_kunnr-kunnr = ls_file_07-kunnr.
+            lw_kunnr-kr_na = ls_file_07-name1.
+            APPEND ls_stylerow TO lw_kunnr-style.
+            INSERT lw_kunnr INTO gt_kunnr  INDEX 1.
+
+            CLEAR:ls_file_07,lw_kunnr.
+          ENDIF.
+      ENDCASE.
+    ENDAT.
+    CLEAR ls_exc_data.
+  ENDLOOP.
+
+  CLEAR lv_tabix.
+  IF gt_file_07[] IS INITIAL AND gt_file_08[] IS INITIAL AND gt_file_09[] IS INITIAL.
+    MESSAGE '数据导入失败,请检查文件内容' TYPE 'S' DISPLAY LIKE 'E'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_DOWNLOAD
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_download .
+  DATA:objdata        LIKE wwwdatatab,
+       ls_destination LIKE rlgrap-filename,
+       lv_rc          LIKE sy-subrc.
+  DATA lv_title       TYPE string VALUE '选择保存路径'.
+  DATA lv_filename    TYPE string VALUE '模板'.
+  DATA lv_path        TYPE string.
+  DATA lv_fullpath    TYPE string.
+  DATA lv_objid       TYPE wwwdata-objid.
+  IF r_lifnr EQ abap_true.
+    lv_objid = 'ZDMM0008'.
+    lv_filename = '供应商组账号-供应商维护模板'.
+  ELSEIF r_zkunnr EQ abap_true.
+    lv_objid = 'ZDMM0009'.
+    lv_filename = '供应商组账号-会员号维护模板'.
+  ELSEIF r_kunnr EQ abap_true.
+    lv_objid = 'ZDMM0007'.
+    lv_filename = '供应商组账号维护模板'.
+  ENDIF.
+  "打开文件路径
+  CALL METHOD cl_gui_frontend_services=>file_save_dialog
+    EXPORTING
+      window_title         = lv_title
+      default_extension    = 'xlsx'
+      default_file_name    = lv_filename
+    CHANGING
+      filename             = lv_filename
+      path                 = lv_path
+      fullpath             = lv_fullpath
+    EXCEPTIONS
+      cntl_error           = 1
+      error_no_gui         = 2
+      not_supported_by_gui = 3
+      OTHERS               = 4.
+  IF lv_fullpath IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  ls_destination = lv_fullpath.
+
+  SELECT SINGLE relid objid
+           FROM wwwdata
+           INTO CORRESPONDING FIELDS OF objdata
+          WHERE srtf2 = '0'
+            AND relid = 'MI'
+            AND objid = lv_objid.
+
+  IF sy-subrc = 0.
+    "下载模板
+    CALL FUNCTION 'DOWNLOAD_WEB_OBJECT'
+      EXPORTING
+        key         = objdata
+        destination = ls_destination
+      IMPORTING
+        rc          = lv_rc.
+    IF lv_rc  = 0.
+      MESSAGE '模板下载成功' TYPE 'S'.
+    ELSE.
+      MESSAGE '模板下载失败' TYPE 'S' DISPLAY LIKE 'E'.
+      LEAVE LIST-PROCESSING.
+    ENDIF.
+  ELSE.
+    MESSAGE '模板下载失败' TYPE 'S' DISPLAY LIKE 'E'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_ZALL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_zall .
+  CASE abap_true.
+    WHEN r_handle.
+      IF r_lifnr EQ abap_true.
+        LOOP AT gt_lifnr ASSIGNING FIELD-SYMBOL(<lw_lifnr>).
+          <lw_lifnr>-checkbox  = abap_true.
+        ENDLOOP.
+      ELSEIF r_zkunnr EQ abap_true.
+        LOOP AT gt_zkunnr ASSIGNING FIELD-SYMBOL(<lw_zkunnr>).
+          <lw_zkunnr>-checkbox  = abap_true.
+        ENDLOOP.
+      ELSEIF r_kunnr EQ abap_true.
+        LOOP AT gt_kunnr ASSIGNING FIELD-SYMBOL(<lw_kunnr>).
+          <lw_kunnr>-checkbox  = abap_true.
+        ENDLOOP.
+      ENDIF.
+  ENDCASE.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FRM_ZSAL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM frm_zsal .
+  CASE abap_true.
+    WHEN r_handle.
+      IF r_lifnr EQ abap_true.
+        LOOP AT gt_lifnr ASSIGNING FIELD-SYMBOL(<lw_lifnr>).
+          <lw_lifnr>-checkbox  = abap_false.
+        ENDLOOP.
+      ELSEIF r_zkunnr EQ abap_true.
+        LOOP AT gt_zkunnr ASSIGNING FIELD-SYMBOL(<lw_zkunnr>).
+          <lw_zkunnr>-checkbox  = abap_false.
+        ENDLOOP.
+      ELSEIF r_kunnr EQ abap_true.
+        LOOP AT gt_kunnr ASSIGNING FIELD-SYMBOL(<lw_kunnr>).
+          <lw_kunnr>-checkbox  = abap_false.
+        ENDLOOP.
+      ENDIF.
+  ENDCASE.
+ENDFORM.
