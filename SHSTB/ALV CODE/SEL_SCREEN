@@ -1,0 +1,27 @@
+*&---------------------------------------------------------------------*
+*&  包含                ZPMM0002_S01
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+PARAMETER     :r_lifnr RADIOBUTTON GROUP g1 USER-COMMAND fuc DEFAULT 'X'.  "
+SELECT-OPTIONS:s_kr_08 FOR ztmm0008-kunnr MODIF ID m1.
+SELECT-OPTIONS:s_lr_08 FOR ztmm0008-lifnr MODIF ID m1.
+PARAMETER     :r_zkunnr RADIOBUTTON GROUP g1.  "
+SELECT-OPTIONS:s_kr_09  FOR ztmm0009-kunnr  MODIF ID m3.
+SELECT-OPTIONS:s_zkr_09 FOR ztmm0009-zkunnr MODIF ID m3.
+PARAMETER     :r_kunnr RADIOBUTTON GROUP g1.  "
+SELECT-OPTIONS:s_kr_07  FOR ztmm0007-kunnr  MODIF ID m4.
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002."
+SELECT-OPTIONS:s_kunnr   FOR ztmm0008-kunnr  MODIF ID m2.
+SELECT-OPTIONS:s_kr_na   FOR ztmm0008-lifnr  MODIF ID m2.
+SELECT-OPTIONS:s_lifnr   FOR ztmm0009-kunnr  MODIF ID m2.
+SELECT-OPTIONS:s_lr_na   FOR ztmm0009-zkunnr MODIF ID m2.
+SELECT-OPTIONS:s_zkunnr  FOR ztmm0008-kunnr  MODIF ID m2.
+SELECT-OPTIONS:s_zkr_na  FOR ztmm0008-lifnr  MODIF ID m2.
+SELECTION-SCREEN END OF BLOCK b2.
+
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE text-003.
+PARAMETER     :r_handle RADIOBUTTON GROUP g2 USER-COMMAND fuc DEFAULT 'X'.
+PARAMETER     :r_query  RADIOBUTTON GROUP g2 .
+SELECTION-SCREEN END OF BLOCK b3.
