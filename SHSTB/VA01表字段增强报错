@@ -1,0 +1,11 @@
+SAP @5C\Q错误@		对大小 990 的数据对象的部分字段访问（偏移量 = 30，长度 = 980）超出有效边界。		
+BAPIPAREX
+STRUCTURE	  类型	TE_STRUC	CHAR	30	0	BAPI 表扩展的结构名称
+VALUEPART1	类型	VALUEPART	CHAR	240	0	BAPI 扩展参数的数据部分 
+VALUEPART2	类型	VALUEPART	CHAR	240	0	BAPI 扩展参数的数据部分 
+VALUEPART3	类型	VALUEPART	CHAR	240	0	BAPI 扩展参数的数据部分 
+VALUEPART4	类型	VALUEPART	CHAR	240	0	BAPI 扩展参数的数据部分 
+BAPIPAREX总长度为30+240*4 = 990位
+现在为30+950 = 980位
+
+因为增强结构（bapiparex）最多增强960（240*4）位，现在已经增强950位了，已经不能再增强20位的字段到SAP提供的增强结构里
